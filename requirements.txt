@@ -8,7 +8,7 @@ python-jose[cryptography]
 python-multipart
 python-dotenv
 redis
-psycopg2-binary
+psycopg[binary]
 eth-account
 mnemonic
 base58
