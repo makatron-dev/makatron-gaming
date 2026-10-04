@@ -3,11 +3,13 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env
 load_dotenv()
 
-# Use PostgreSQL on Render, or SQLite for local testing
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./broker.db")
+
+# psycopg v3 requires the URL to start with "postgresql+psycopg://"
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
 # SQLite needs a special argument, PostgreSQL does not
 connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
