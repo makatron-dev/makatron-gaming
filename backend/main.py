@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Form
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
@@ -11,6 +12,13 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="MAKATRON BROKER API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (we'll restrict this later)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 SECRET_KEY = "YOUR_SUPER_SECRET_KEY_CHANGE_THIS_LATER"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
