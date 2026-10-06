@@ -615,3 +615,23 @@ def list_trades(
         }
         for t in trades
     ]
+    @app.post("/admin/reset-order-tables")
+def reset_order_tables(secret: str = Form(...), db: Session = Depends(get_db)):
+    """TEMPORARY: Drops and recreates the orders and trades tables. Delete this endpoint after use."""
+    if secret != "makatron_reset_2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    
+    from sqlalchemy import text
+    try:
+        db.execute(text("DROP TABLE IF EXISTS trades CASCADE"))
+        db.execute(text("DROP TABLE IF EXISTS orders CASCADE"))
+        db.commit()
+        
+        # Recreate using the current models
+        models.Order.__table__.create(bind=db.get_bind(), checkfirst=True)
+        models.Trade.__table__.create(bind=db.get_bind(), checkfirst=True)
+        
+        return {"message": "Order tables reset successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
