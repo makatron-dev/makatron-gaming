@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from backend import models
 from backend.database import engine, get_db
+from decimal import Decimal
+from datetime import datetime, timedelta
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -255,3 +257,361 @@ def admin_stats(admin = Depends(get_current_admin), db: Session = Depends(get_db
         "total_wallets": total_wallets,
         "total_balances": {asset: str(total) for asset, total in balance_sums}
     }
+@app.post("/promote-to-admin")
+def promote_to_admin(
+    email: str = Form(...),
+    secret: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    if secret != "makatron_promote_secret_2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_admin = True
+    db.commit()
+    print(f"[PROMOTE] {email} is now an admin")
+    return {"message": f"{email} is now an admin"}
+# ============================================
+# ORDER ENGINE
+# ============================================
+
+from decimal import Decimal
+from datetime import datetime, timedelta
+
+# Fee: 0.10% taken from the receive side
+TRADE_FEE_RATE = Decimal("0.001")
+
+# Supported pairs (base/quote). For now, all against USDT.
+SUPPORTED_PAIRS = {
+    "BTC/USDT": "BTC",
+    "ETH/USDT": "ETH",
+    "BNB/USDT": "BNB",
+    "SOL/USDT": "SOL",
+    "XRP/USDT": "XRP",
+}
+
+# Fee account — where fees accumulate (user_id 0 = platform)
+PLATFORM_USER_ID = 0
+
+
+def get_asset_balance(db: Session, user_id: int, asset: str):
+    """Get a Balance row for (user, asset). Creates it if missing."""
+    balance = db.query(models.Balance).filter(
+        models.Balance.user_id == user_id,
+        models.Balance.asset == asset,
+    ).first()
+    if not balance:
+        balance = models.Balance(user_id=user_id, asset=asset, available=0, locked=0)
+        db.add(balance)
+        db.commit()
+        db.refresh(balance)
+    return balance
+
+
+def deduct_available(db: Session, user_id: int, asset: str, amount: Decimal):
+    """Deduct from available balance. Raises if insufficient."""
+    balance = get_asset_balance(db, user_id, asset)
+    if Decimal(balance.available) < amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient {asset} balance. Need {amount}, have {balance.available}"
+        )
+    balance.available = Decimal(balance.available) - amount
+    db.commit()
+
+
+def credit_available(db: Session, user_id: int, asset: str, amount: Decimal):
+    """Add to available balance."""
+    balance = get_asset_balance(db, user_id, asset)
+    balance.available = Decimal(balance.available) + amount
+    db.commit()
+
+
+def lock_balance(db: Session, user_id: int, asset: str, amount: Decimal):
+    """Move from available → locked."""
+    balance = get_asset_balance(db, user_id, asset)
+    if Decimal(balance.available) < amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient {asset} balance to lock. Need {amount}, have {balance.available}"
+        )
+    balance.available = Decimal(balance.available) - amount
+    balance.locked = Decimal(balance.locked) + amount
+    db.commit()
+
+
+def unlock_balance(db: Session, user_id: int, asset: str, amount: Decimal):
+    """Move from locked → available."""
+    balance = get_asset_balance(db, user_id, asset)
+    if Decimal(balance.locked) < amount:
+        amount = Decimal(balance.locked)  # safety: don't unlock more than locked
+    balance.locked = Decimal(balance.locked) - amount
+    balance.available = Decimal(balance.available) + amount
+    db.commit()
+
+
+def parse_pair(symbol: str):
+    """Split 'ETH/USDT' into ('ETH', 'USDT')."""
+    if "/" not in symbol:
+        raise HTTPException(status_code=400, detail="Invalid symbol format")
+    base, quote = symbol.split("/")
+    return base.upper(), quote.upper()
+
+
+def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
+    """
+    Fill an entire order at fill_price.
+    Updates balances, creates a Trade row, marks order filled.
+    """
+    base, quote = parse_pair(order.symbol)
+    qty = Decimal(order.quantity)
+    gross = qty * fill_price
+    fee = gross * TRADE_FEE_RATE
+
+    if order.side == "buy":
+        # User locked 'gross' in quote asset. On fill: they receive base - fee, spend gross.
+        # Unlock nothing (it's already locked in quote).
+        received_base = qty * (Decimal("1") - TRADE_FEE_RATE)
+        credit_available(db, order.user_id, base, received_base)
+        # The locked quote is spent (remove from locked)
+        quote_bal = get_asset_balance(db, order.user_id, quote)
+        quote_bal.locked = Decimal(quote_bal.locked) - gross
+        if quote_bal.locked < 0:
+            quote_bal.locked = Decimal("0")
+        db.commit()
+    else:
+        # sell: user locked 'qty' of base. On fill: they receive gross - fee in quote.
+        received_quote = gross * (Decimal("1") - TRADE_FEE_RATE)
+        credit_available(db, order.user_id, quote, received_quote)
+        base_bal = get_asset_balance(db, order.user_id, base)
+        base_bal.locked = Decimal(base_bal.locked) - qty
+        if base_bal.locked < 0:
+            base_bal.locked = Decimal("0")
+        db.commit()
+
+    # Record the trade
+    trade = models.Trade(
+        order_id=order.id,
+        user_id=order.user_id,
+        symbol=order.symbol,
+        side=order.side,
+        price=fill_price,
+        quantity=qty,
+        total_value=gross,
+        fee=fee,
+    )
+    db.add(trade)
+
+    # Mark order as filled
+    order.status = "filled"
+    order.filled_quantity = qty
+    order.updated_at = datetime.utcnow()
+    db.commit()
+
+
+@app.post("/orders")
+def place_order(
+    symbol: str = Form(...),
+    side: str = Form(...),          # "buy" | "sell"
+    order_type: str = Form(...),    # "market" | "limit"
+    quantity: str = Form(...),
+    price: str = Form(None),        # required for limit
+    current_market_price: str = Form(...),   # frontend passes the live price
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    # Auth
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("id")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    symbol = symbol.upper().replace(" ", "")
+    if symbol not in SUPPORTED_PAIRS:
+        raise HTTPException(status_code=400, detail=f"Symbol {symbol} not supported")
+
+    side = side.lower()
+    order_type = order_type.lower()
+    if side not in ("buy", "sell"):
+        raise HTTPException(status_code=400, detail="Side must be 'buy' or 'sell'")
+    if order_type not in ("market", "limit"):
+        raise HTTPException(status_code=400, detail="Order type must be 'market' or 'limit'")
+
+    try:
+        qty = Decimal(str(quantity))
+        market_price = Decimal(str(current_market_price))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid quantity or market price")
+
+    if qty <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be positive")
+
+    base, quote = parse_pair(symbol)
+
+    # Determine fill/lock price
+    if order_type == "market":
+        effective_price = market_price
+    else:
+        if price is None or price == "":
+            raise HTTPException(status_code=400, detail="Limit orders require a price")
+        effective_price = Decimal(str(price))
+        if effective_price <= 0:
+            raise HTTPException(status_code=400, detail="Price must be positive")
+
+    # Create the order row first (so we have an id for the trade)
+    new_order = models.Order(
+        user_id=user_id,
+        symbol=symbol,
+        side=side,
+        order_type=order_type,
+        price=effective_price if order_type == "limit" else None,
+        quantity=qty,
+        filled_quantity=Decimal("0"),
+        status="pending",
+    )
+    db.add(new_order)
+    db.commit()
+    db.refresh(new_order)
+
+    # --- MARKET ORDER: fill immediately ---
+    if order_type == "market":
+        if side == "buy":
+            # User spends qty * effective_price of quote
+            cost = qty * effective_price
+            deduct_available(db, user_id, quote, cost)
+        else:
+            # User spends qty of base
+            deduct_available(db, user_id, base, qty)
+
+        execute_trade(db, new_order, effective_price)
+        return {
+            "message": "Market order filled",
+            "order_id": new_order.id,
+            "status": "filled",
+            "fill_price": str(effective_price),
+            "quantity": str(qty),
+        }
+
+    # --- LIMIT ORDER: lock funds, stay pending ---
+    if side == "buy":
+        lock_amount = qty * effective_price
+        lock_balance(db, user_id, quote, lock_amount)
+    else:
+        lock_balance(db, user_id, base, qty)
+
+    return {
+        "message": "Limit order placed",
+        "order_id": new_order.id,
+        "status": "pending",
+        "price": str(effective_price),
+        "quantity": str(qty),
+    }
+
+
+@app.get("/orders")
+def list_orders(
+    status_filter: str = None,   # "pending" | "filled" | "cancelled"
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("id")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    q = db.query(models.Order).filter(models.Order.user_id == user_id)
+    if status_filter:
+        q = q.filter(models.Order.status == status_filter)
+
+    orders = q.order_by(models.Order.created_at.desc()).all()
+
+    return [
+        {
+            "id": o.id,
+            "symbol": o.symbol,
+            "side": o.side,
+            "order_type": o.order_type,
+            "price": str(o.price) if o.price is not None else None,
+            "quantity": str(o.quantity),
+            "filled_quantity": str(o.filled_quantity),
+            "status": o.status,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+            "updated_at": o.updated_at.isoformat() if o.updated_at else None,
+        }
+        for o in orders
+    ]
+
+
+@app.post("/orders/{order_id}/cancel")
+def cancel_order(
+    order_id: int,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("id")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    order = db.query(models.Order).filter(
+        models.Order.id == order_id,
+        models.Order.user_id == user_id,
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "pending":
+        raise HTTPException(status_code=400, detail="Only pending orders can be cancelled")
+
+    base, quote = parse_pair(order.symbol)
+    qty = Decimal(order.quantity)
+
+    # Refund the locked amount
+    if order.side == "buy":
+        if order.price is not None:
+            refund = qty * Decimal(order.price)
+            unlock_balance(db, user_id, quote, refund)
+    else:
+        unlock_balance(db, user_id, base, qty)
+
+    order.status = "cancelled"
+    order.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Order cancelled", "order_id": order.id}
+
+
+@app.get("/trades")
+def list_trades(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("id")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    trades = db.query(models.Trade).filter(
+        models.Trade.user_id == user_id
+    ).order_by(models.Trade.executed_at.desc()).all()
+
+    return [
+        {
+            "id": t.id,
+            "order_id": t.order_id,
+            "symbol": t.symbol,
+            "side": t.side,
+            "price": str(t.price),
+            "quantity": str(t.quantity),
+            "total_value": str(t.total_value),
+            "fee": str(t.fee),
+            "executed_at": t.executed_at.isoformat() if t.executed_at else None,
+        }
+        for t in trades
+    ]
