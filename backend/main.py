@@ -663,4 +663,35 @@ def list_positions(token: str = Depends(oauth2_scheme), db: Session = Depends(ge
         for p in positions
         if float(p.quantity) > 0 or float(p.realized_pnl) != 0
     ]
+    # ==========================================
+# TEMPORARY — RESET TRADE TABLES (DELETE AFTER USE)
+# ==========================================
+
+@app.post("/admin/reset-trade-tables")
+def reset_trade_tables(
+    secret: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """TEMPORARY: Drops and recreates trades, orders, and positions tables.
+    Preserves users, balances, and wallets. Delete this endpoint after use.
+    """
+    if secret != "makatron_reset_2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    from sqlalchemy import text
+
+    try:
+        db.execute(text("DROP TABLE IF EXISTS trades CASCADE"))
+        db.execute(text("DROP TABLE IF EXISTS orders CASCADE"))
+        db.execute(text("DROP TABLE IF EXISTS positions CASCADE"))
+        db.commit()
+
+        models.Trade.__table__.create(bind=db.get_bind(), checkfirst=True)
+        models.Order.__table__.create(bind=db.get_bind(), checkfirst=True)
+        models.Position.__table__.create(bind=db.get_bind(), checkfirst=True)
+
+        return {"message": "Trade tables reset successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     
