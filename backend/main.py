@@ -254,7 +254,7 @@ def admin_stats(admin=Depends(get_current_admin), db: Session = Depends(get_db))
         "total_balances": {asset: str(total) for asset, total in balance_sums},
     }
     # ==========================================
-# ORDER ENGINE
+# ORDER ENGINE (with FIFO P&L tracking)
 # ==========================================
 
 TRADE_FEE_RATE = Decimal("0.001")
@@ -327,29 +327,92 @@ def parse_pair(symbol: str):
     return base.upper(), quote.upper()
 
 
+def get_position(db: Session, user_id: int, asset: str):
+    """Get or create a Position row for (user, asset)."""
+    pos = (
+        db.query(models.Position)
+        .filter(models.Position.user_id == user_id, models.Position.asset == asset)
+        .first()
+    )
+    if not pos:
+        pos = models.Position(
+            user_id=user_id,
+            asset=asset,
+            quantity=Decimal("0"),
+            avg_buy_price=Decimal("0"),
+            realized_pnl=Decimal("0"),
+        )
+        db.add(pos)
+        db.commit()
+        db.refresh(pos)
+    return pos
+
+
 def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
+    """
+    Fill an entire order at fill_price.
+    Updates balances, Position (with FIFO cost basis), creates Trade row, marks order filled.
+    """
     base, quote = parse_pair(order.symbol)
     qty = Decimal(order.quantity)
     gross = qty * fill_price
     fee = gross * TRADE_FEE_RATE
 
+    realized_pnl = Decimal("0")
+
     if order.side == "buy":
+        # ------ BALANCES ------
         received_base = qty * (Decimal("1") - TRADE_FEE_RATE)
         credit_available(db, order.user_id, base, received_base)
+
         quote_bal = get_asset_balance(db, order.user_id, quote)
         quote_bal.locked = Decimal(quote_bal.locked) - gross
         if quote_bal.locked < 0:
             quote_bal.locked = Decimal("0")
         db.commit()
+
+        # ------ POSITION (weighted avg cost) ------
+        pos = get_position(db, order.user_id, base)
+        old_qty = Decimal(pos.quantity)
+        old_cost = Decimal(pos.avg_buy_price)
+        new_qty = old_qty + received_base
+
+        if new_qty > 0:
+            new_avg = (old_qty * old_cost + received_base * fill_price) / new_qty
+        else:
+            new_avg = Decimal("0")
+
+        pos.quantity = new_qty
+        pos.avg_buy_price = new_avg
+        db.commit()
+
     else:
+        # ------ SELL ------
         received_quote = gross * (Decimal("1") - TRADE_FEE_RATE)
         credit_available(db, order.user_id, quote, received_quote)
+
         base_bal = get_asset_balance(db, order.user_id, base)
         base_bal.locked = Decimal(base_bal.locked) - qty
         if base_bal.locked < 0:
             base_bal.locked = Decimal("0")
         db.commit()
 
+        # ------ POSITION (FIFO realized P&L) ------
+        pos = get_position(db, order.user_id, base)
+        cost_basis = Decimal(pos.avg_buy_price)
+
+        # Realized P&L = (sell price - cost basis) × qty - fee
+        realized_pnl = (fill_price - cost_basis) * qty - fee
+
+        pos.realized_pnl = Decimal(pos.realized_pnl) + realized_pnl
+        pos.quantity = Decimal(pos.quantity) - qty
+
+        if pos.quantity <= 0:
+            pos.quantity = Decimal("0")
+            pos.avg_buy_price = Decimal("0")
+        db.commit()
+
+    # ------ RECORD TRADE ------
     trade = models.Trade(
         order_id=order.id,
         user_id=order.user_id,
@@ -359,6 +422,7 @@ def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
         quantity=qty,
         total_value=gross,
         fee=fee,
+        realized_pnl=realized_pnl,
     )
     db.add(trade)
     order.status = "filled"
@@ -559,7 +623,44 @@ def list_trades(token: str = Depends(oauth2_scheme), db: Session = Depends(get_d
             "quantity": str(t.quantity),
             "total_value": str(t.total_value),
             "fee": str(t.fee),
+            "realized_pnl": str(t.realized_pnl) if t.realized_pnl is not None else "0",
             "executed_at": t.executed_at.isoformat() if t.executed_at else None,
         }
         for t in trades
     ]
+
+
+# ==========================================
+# POSITIONS / P&L ENDPOINT
+# ==========================================
+
+@app.get("/positions")
+def list_positions(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """
+    Return user's current positions with cost basis and cumulative realized P&L.
+    Unrealized P&L is calculated client-side using live Bybit prices.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("id")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    positions = (
+        db.query(models.Position)
+        .filter(models.Position.user_id == user_id)
+        .all()
+    )
+
+    return [
+        {
+            "asset": p.asset,
+            "quantity": str(p.quantity),
+            "avg_buy_price": str(p.avg_buy_price),
+            "realized_pnl": str(p.realized_pnl),
+            "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+        }
+        for p in positions
+        if float(p.quantity) > 0 or float(p.realized_pnl) != 0
+    ]
+    
