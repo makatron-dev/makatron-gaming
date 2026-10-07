@@ -663,7 +663,8 @@ def list_positions(token: str = Depends(oauth2_scheme), db: Session = Depends(ge
         for p in positions
         if float(p.quantity) > 0 or float(p.realized_pnl) != 0
     ]
-    # ==========================================
+    
+ # ==========================================
 # TEMPORARY — RESET TRADE TABLES (DELETE AFTER USE)
 # ==========================================
 
@@ -681,17 +682,21 @@ def reset_trade_tables(
     from sqlalchemy import text
 
     try:
+        # Drop in reverse dependency order
         db.execute(text("DROP TABLE IF EXISTS trades CASCADE"))
         db.execute(text("DROP TABLE IF EXISTS orders CASCADE"))
         db.execute(text("DROP TABLE IF EXISTS positions CASCADE"))
         db.commit()
 
-        models.Trade.__table__.create(bind=db.get_bind(), checkfirst=True)
+        # Recreate in correct dependency order:
+        # 1. orders (no dependencies)
+        # 2. trades (references orders)
+        # 3. positions (no dependencies)
         models.Order.__table__.create(bind=db.get_bind(), checkfirst=True)
+        models.Trade.__table__.create(bind=db.get_bind(), checkfirst=True)
         models.Position.__table__.create(bind=db.get_bind(), checkfirst=True)
 
         return {"message": "Trade tables reset successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    
+        raise HTTPException(status_code=500, detail=str(e))   
