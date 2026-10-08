@@ -699,4 +699,107 @@ def reset_trade_tables(
         return {"message": "Trade tables reset successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))   
+        raise HTTPException(status_code=500, detail=str(e))  
+    # ==========================================
+# POSITION CLOSE (SPOT & FUTURES-READY)
+# ==========================================
+
+@app.post("/positions/{asset}/close")
+def close_position(
+    asset: str,
+    current_market_price: str = Form(...),
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    """
+    Close a position at market price.
+    For spot: sells the entire quantity back to USDT.
+    For futures: closes long/short position (logic will extend in Phase E).
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("id")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    asset = asset.upper()
+    try:
+        mark_price = Decimal(str(current_market_price))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid market price")
+
+    if mark_price <= 0:
+        raise HTTPException(status_code=400, detail="Market price must be positive")
+
+    # Load position
+    pos = (
+        db.query(models.Position)
+        .filter(models.Position.user_id == user_id, models.Position.asset == asset)
+        .first()
+    )
+    if not pos:
+        raise HTTPException(status_code=404, detail=f"No position found for {asset}")
+
+    qty = Decimal(pos.quantity)
+    if qty <= 0:
+        raise HTTPException(status_code=400, detail=f"Position for {asset} is already empty")
+
+    cost_basis = Decimal(pos.avg_buy_price)
+    fee_rate = Decimal("0.001")
+    gross = qty * mark_price
+    fee = gross * fee_rate
+
+    # Compute realized P&L (spot)
+    realized_pnl = (mark_price - cost_basis) * qty - fee
+
+    # Create a synthetic market sell order so the trade history is consistent
+    close_order = models.Order(
+        user_id=user_id,
+        symbol=f"{asset}/USDT",
+        side="sell",
+        order_type="market",
+        price=None,
+        quantity=qty,
+        filled_quantity=qty,
+        status="filled",
+    )
+    db.add(close_order)
+    db.commit()
+    db.refresh(close_order)
+
+    # Record the trade
+    close_trade = models.Trade(
+        order_id=close_order.id,
+        user_id=user_id,
+        symbol=f"{asset}/USDT",
+        side="sell",
+        price=mark_price,
+        quantity=qty,
+        total_value=gross,
+        fee=fee,
+        realized_pnl=realized_pnl,
+    )
+    db.add(close_trade)
+
+    # Credit the USDT back to user (minus fee)
+    quote_balance = get_asset_balance(db, user_id, "USDT")
+    quote_balance.available = Decimal(quote_balance.available) + (gross - fee)
+
+    # Update position: empty it out, keep realized P&L
+    pos.quantity = Decimal("0")
+    pos.avg_buy_price = Decimal("0")
+    pos.margin_used = Decimal("0")
+    pos.realized_pnl = Decimal(pos.realized_pnl) + realized_pnl
+    pos.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    return {
+        "message": f"{asset} position closed",
+        "asset": asset,
+        "quantity": str(qty),
+        "close_price": str(mark_price),
+        "proceeds": str(gross - fee),
+        "fee": str(fee),
+        "realized_pnl": str(realized_pnl),
+    } 
