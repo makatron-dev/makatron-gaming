@@ -253,8 +253,10 @@ def admin_stats(admin=Depends(get_current_admin), db: Session = Depends(get_db))
         "total_wallets": total_wallets,
         "total_balances": {asset: str(total) for asset, total in balance_sums},
     }
-    # ==========================================
-# ORDER ENGINE (with FIFO P&L tracking)
+
+
+# ==========================================
+# ORDER ENGINE
 # ==========================================
 
 TRADE_FEE_RATE = Decimal("0.001")
@@ -328,7 +330,6 @@ def parse_pair(symbol: str):
 
 
 def get_position(db: Session, user_id: int, asset: str):
-    """Get or create a Position row for (user, asset)."""
     pos = (
         db.query(models.Position)
         .filter(models.Position.user_id == user_id, models.Position.asset == asset)
@@ -341,6 +342,10 @@ def get_position(db: Session, user_id: int, asset: str):
             quantity=Decimal("0"),
             avg_buy_price=Decimal("0"),
             realized_pnl=Decimal("0"),
+            market_type="spot",
+            side="long",
+            leverage=Decimal("1"),
+            margin_used=Decimal("0"),
         )
         db.add(pos)
         db.commit()
@@ -349,10 +354,6 @@ def get_position(db: Session, user_id: int, asset: str):
 
 
 def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
-    """
-    Fill an entire order at fill_price.
-    Updates balances, Position (with FIFO cost basis), creates Trade row, marks order filled.
-    """
     base, quote = parse_pair(order.symbol)
     qty = Decimal(order.quantity)
     gross = qty * fill_price
@@ -361,7 +362,6 @@ def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
     realized_pnl = Decimal("0")
 
     if order.side == "buy":
-        # ------ BALANCES ------
         received_base = qty * (Decimal("1") - TRADE_FEE_RATE)
         credit_available(db, order.user_id, base, received_base)
 
@@ -371,7 +371,6 @@ def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
             quote_bal.locked = Decimal("0")
         db.commit()
 
-        # ------ POSITION (weighted avg cost) ------
         pos = get_position(db, order.user_id, base)
         old_qty = Decimal(pos.quantity)
         old_cost = Decimal(pos.avg_buy_price)
@@ -384,10 +383,10 @@ def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
 
         pos.quantity = new_qty
         pos.avg_buy_price = new_avg
+        pos.margin_used = new_qty * new_avg
         db.commit()
 
     else:
-        # ------ SELL ------
         received_quote = gross * (Decimal("1") - TRADE_FEE_RATE)
         credit_available(db, order.user_id, quote, received_quote)
 
@@ -397,11 +396,8 @@ def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
             base_bal.locked = Decimal("0")
         db.commit()
 
-        # ------ POSITION (FIFO realized P&L) ------
         pos = get_position(db, order.user_id, base)
         cost_basis = Decimal(pos.avg_buy_price)
-
-        # Realized P&L = (sell price - cost basis) × qty - fee
         realized_pnl = (fill_price - cost_basis) * qty - fee
 
         pos.realized_pnl = Decimal(pos.realized_pnl) + realized_pnl
@@ -410,9 +406,11 @@ def execute_trade(db: Session, order: models.Order, fill_price: Decimal):
         if pos.quantity <= 0:
             pos.quantity = Decimal("0")
             pos.avg_buy_price = Decimal("0")
+            pos.margin_used = Decimal("0")
+        else:
+            pos.margin_used = Decimal(pos.quantity) * Decimal(pos.avg_buy_price)
         db.commit()
 
-    # ------ RECORD TRADE ------
     trade = models.Trade(
         order_id=order.id,
         user_id=order.user_id,
@@ -631,15 +629,11 @@ def list_trades(token: str = Depends(oauth2_scheme), db: Session = Depends(get_d
 
 
 # ==========================================
-# POSITIONS / P&L ENDPOINT
+# POSITIONS / P&L
 # ==========================================
 
 @app.get("/positions")
 def list_positions(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    """
-    Return user's current positions with cost basis and cumulative realized P&L.
-    Unrealized P&L is calculated client-side using live Bybit prices.
-    """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("id")
@@ -658,51 +652,16 @@ def list_positions(token: str = Depends(oauth2_scheme), db: Session = Depends(ge
             "quantity": str(p.quantity),
             "avg_buy_price": str(p.avg_buy_price),
             "realized_pnl": str(p.realized_pnl),
+            "market_type": p.market_type,
+            "side": p.side,
+            "leverage": str(p.leverage) if p.leverage is not None else "1",
+            "margin_used": str(p.margin_used) if p.margin_used is not None else "0",
             "updated_at": p.updated_at.isoformat() if p.updated_at else None,
         }
         for p in positions
         if float(p.quantity) > 0 or float(p.realized_pnl) != 0
     ]
-    
- # ==========================================
-# TEMPORARY — RESET TRADE TABLES (DELETE AFTER USE)
-# ==========================================
 
-@app.post("/admin/reset-trade-tables")
-def reset_trade_tables(
-    secret: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    """TEMPORARY: Drops and recreates trades, orders, and positions tables.
-    Preserves users, balances, and wallets. Delete this endpoint after use.
-    """
-    if secret != "makatron_reset_2026":
-        raise HTTPException(status_code=403, detail="Invalid secret")
-
-    from sqlalchemy import text
-
-    try:
-        # Drop in reverse dependency order
-        db.execute(text("DROP TABLE IF EXISTS trades CASCADE"))
-        db.execute(text("DROP TABLE IF EXISTS orders CASCADE"))
-        db.execute(text("DROP TABLE IF EXISTS positions CASCADE"))
-        db.commit()
-
-        # Recreate in correct dependency order:
-        # 1. orders (no dependencies)
-        # 2. trades (references orders)
-        # 3. positions (no dependencies)
-        models.Order.__table__.create(bind=db.get_bind(), checkfirst=True)
-        models.Trade.__table__.create(bind=db.get_bind(), checkfirst=True)
-        models.Position.__table__.create(bind=db.get_bind(), checkfirst=True)
-
-        return {"message": "Trade tables reset successfully"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))  
-    # ==========================================
-# POSITION CLOSE (SPOT & FUTURES-READY)
-# ==========================================
 
 @app.post("/positions/{asset}/close")
 def close_position(
@@ -711,11 +670,6 @@ def close_position(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ):
-    """
-    Close a position at market price.
-    For spot: sells the entire quantity back to USDT.
-    For futures: closes long/short position (logic will extend in Phase E).
-    """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("id")
@@ -731,7 +685,6 @@ def close_position(
     if mark_price <= 0:
         raise HTTPException(status_code=400, detail="Market price must be positive")
 
-    # Load position
     pos = (
         db.query(models.Position)
         .filter(models.Position.user_id == user_id, models.Position.asset == asset)
@@ -748,11 +701,8 @@ def close_position(
     fee_rate = Decimal("0.001")
     gross = qty * mark_price
     fee = gross * fee_rate
-
-    # Compute realized P&L (spot)
     realized_pnl = (mark_price - cost_basis) * qty - fee
 
-    # Create a synthetic market sell order so the trade history is consistent
     close_order = models.Order(
         user_id=user_id,
         symbol=f"{asset}/USDT",
@@ -767,7 +717,6 @@ def close_position(
     db.commit()
     db.refresh(close_order)
 
-    # Record the trade
     close_trade = models.Trade(
         order_id=close_order.id,
         user_id=user_id,
@@ -781,11 +730,9 @@ def close_position(
     )
     db.add(close_trade)
 
-    # Credit the USDT back to user (minus fee)
     quote_balance = get_asset_balance(db, user_id, "USDT")
     quote_balance.available = Decimal(quote_balance.available) + (gross - fee)
 
-    # Update position: empty it out, keep realized P&L
     pos.quantity = Decimal("0")
     pos.avg_buy_price = Decimal("0")
     pos.margin_used = Decimal("0")
@@ -802,30 +749,4 @@ def close_position(
         "proceeds": str(gross - fee),
         "fee": str(fee),
         "realized_pnl": str(realized_pnl),
-    } 
-    # ==========================================
-# TEMPORARY — RESET POSITIONS TABLE (DELETE AFTER USE)
-# ==========================================
-
-@app.post("/admin/reset-positions-table")
-def reset_positions_table(
-    secret: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    if secret != "makatron_reset_2026":
-        raise HTTPException(status_code=403, detail="Invalid secret")
-
-    from sqlalchemy import text
-
-    try:
-        db.execute(text("DROP TABLE IF EXISTS positions CASCADE"))
-        db.commit()
-
-        models.Position.__table__.create(bind=db.get_bind(), checkfirst=True)
-
-        return {"message": "Positions table reset successfully"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    
-    
+    }
