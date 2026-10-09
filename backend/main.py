@@ -812,9 +812,6 @@ def reset_positions_table(
     secret: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    """TEMPORARY: Drops and recreates the positions table with the new futures-ready schema.
-    Preserves users, balances, wallets, orders, and trades. Delete this endpoint after use.
-    """
     if secret != "makatron_reset_2026":
         raise HTTPException(status_code=403, detail="Invalid secret")
 
@@ -830,4 +827,5 @@ def reset_positions_table(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+    
     
