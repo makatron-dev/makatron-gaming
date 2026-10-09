@@ -803,3 +803,31 @@ def close_position(
         "fee": str(fee),
         "realized_pnl": str(realized_pnl),
     } 
+    # ==========================================
+# TEMPORARY — RESET POSITIONS TABLE (DELETE AFTER USE)
+# ==========================================
+
+@app.post("/admin/reset-positions-table")
+def reset_positions_table(
+    secret: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """TEMPORARY: Drops and recreates the positions table with the new futures-ready schema.
+    Preserves users, balances, wallets, orders, and trades. Delete this endpoint after use.
+    """
+    if secret != "makatron_reset_2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    from sqlalchemy import text
+
+    try:
+        db.execute(text("DROP TABLE IF EXISTS positions CASCADE"))
+        db.commit()
+
+        models.Position.__table__.create(bind=db.get_bind(), checkfirst=True)
+
+        return {"message": "Positions table reset successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    
