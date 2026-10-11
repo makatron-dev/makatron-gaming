@@ -11,3 +11,16 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+
+  - type: worker
+    name: makatron-broker-worker
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m backend.wallet.worker
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: MASTER_SEED
+        sync: false
+      - key: DATABASE_URL
+        sync: false

@@ -12,3 +12,4 @@ psycopg[binary]
 eth-account
 mnemonic
 base58
+httpx

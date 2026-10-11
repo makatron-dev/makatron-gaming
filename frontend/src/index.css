@@ -1,0 +1,356 @@
+@import "tailwindcss";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+
+/* ============ SHARED (never change) ============ */
+:root {
+  --mk-accent: #f0b90b;
+  --mk-accent-hover: #d4a209;
+  --mk-accent-glow: rgba(240, 185, 11, 0.15);
+  --mk-shadow-accent: 0 4px 16px rgba(240, 185, 11, 0.25);
+
+  --mk-radius-sm: 6px;
+  --mk-radius-md: 10px;
+  --mk-radius-lg: 14px;
+  --mk-radius-xl: 20px;
+}
+
+/* ============ DARK THEME (default) ============ */
+.theme-dark {
+  --mk-bg-primary: #0a0b0d;
+  --mk-bg-secondary: #111318;
+  --mk-bg-tertiary: #1a1d24;
+  --mk-bg-hover: #22262f;
+
+  --mk-border: #1e2128;
+  --mk-border-hover: #2a2e37;
+
+  --mk-text-primary: #ffffff;
+  --mk-text-secondary: #9ca3af;
+  --mk-text-tertiary: #6b7280;
+
+  --mk-success: #0ecb81;
+  --mk-success-bg: rgba(14, 203, 129, 0.12);
+  --mk-danger: #f6465d;
+  --mk-danger-bg: rgba(246, 70, 93, 0.12);
+  --mk-info: #3b82f6;
+
+  --mk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --mk-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --mk-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ============ LIGHT THEME ============ */
+.theme-light {
+  --mk-bg-primary: #ffffff;
+  --mk-bg-secondary: #f7f8fa;
+  --mk-bg-tertiary: #eef0f4;
+  --mk-bg-hover: #e5e7eb;
+
+  --mk-border: #e5e7eb;
+  --mk-border-hover: #d1d5db;
+
+  --mk-text-primary: #0a0b0d;
+  --mk-text-secondary: #4b5563;
+  --mk-text-tertiary: #9ca3af;
+
+  --mk-success: #059669;
+  --mk-success-bg: rgba(5, 150, 105, 0.10);
+  --mk-danger: #dc2626;
+  --mk-danger-bg: rgba(220, 38, 38, 0.10);
+  --mk-info: #2563eb;
+
+  --mk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mk-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --mk-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* ============ BASE STYLES ============ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  background-color: var(--mk-bg-primary);
+  color: var(--mk-text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+/* ============ SCROLLBAR ============ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--mk-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--mk-border-hover);
+  border-radius: 5px;
+  border: 2px solid var(--mk-bg-primary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mk-text-tertiary);
+}
+
+/* ============ INPUTS ============ */
+.mk-input {
+  width: 100%;
+  padding: 12px 16px;
+  background-color: var(--mk-bg-secondary);
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-sm);
+  color: var(--mk-text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.mk-input:hover {
+  border-color: var(--mk-border-hover);
+}
+
+.mk-input:focus {
+  border-color: var(--mk-accent);
+  box-shadow: 0 0 0 3px var(--mk-accent-glow);
+}
+
+.mk-input::placeholder {
+  color: var(--mk-text-tertiary);
+}
+
+/* ============ BUTTONS ============ */
+.mk-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  background-color: var(--mk-accent);
+  border: none;
+  border-radius: var(--mk-radius-sm);
+  color: #000;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mk-btn-primary:hover:not(:disabled) {
+  background-color: var(--mk-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--mk-shadow-accent);
+}
+
+.mk-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.mk-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mk-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  background-color: var(--mk-bg-tertiary);
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-sm);
+  color: var(--mk-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mk-btn-secondary:hover:not(:disabled) {
+  background-color: var(--mk-bg-hover);
+  border-color: var(--mk-border-hover);
+}
+
+.mk-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background-color: transparent;
+  border: none;
+  color: var(--mk-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: var(--mk-radius-sm);
+  transition: all 0.15s ease;
+}
+
+.mk-btn-ghost:hover {
+  background-color: var(--mk-bg-tertiary);
+  color: var(--mk-text-primary);
+}
+
+/* ============ CARDS ============ */
+.mk-card {
+  background-color: var(--mk-bg-secondary);
+  border: 1px solid var(--mk-border);
+  border-radius: var(--mk-radius-md);
+  transition: border-color 0.15s ease;
+}
+
+.mk-card:hover {
+  border-color: var(--mk-border-hover);
+}
+
+/* ============ TEXT STYLES ============ */
+.mk-label {
+  display: block;
+  font-size: 13px;
+  color: var(--mk-text-secondary);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.mk-link {
+  color: var(--mk-accent);
+  text-decoration: none;
+  font-weight: 500;
+  transition: opacity 0.15s ease;
+}
+
+.mk-link:hover {
+  opacity: 0.8;
+}
+
+.mk-gradient-text {
+  background: linear-gradient(135deg, #f0b90b 0%, #d4a209 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============ ANIMATIONS ============ */
+@keyframes mk-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mk-fade-in {
+  animation: mk-fade-in 0.4s ease-out;
+}
+
+@keyframes mk-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.mk-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: mk-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes mk-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.mk-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--mk-bg-tertiary) 0%,
+    var(--mk-bg-hover) 50%,
+    var(--mk-bg-tertiary) 100%
+  );
+  background-size: 200% 100%;
+  animation: mk-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--mk-radius-sm);
+}
+
+@keyframes mk-progress {
+  0% { transform: scaleX(0); }
+  50% { transform: scaleX(0.7); }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+.mk-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f0b90b, #0ecb81);
+  z-index: 9999;
+  animation: mk-progress 1.5s ease-in-out infinite;
+  transform-origin: left;
+  box-shadow: 0 0 12px rgba(240,185,11,0.6);
+}
+
+@keyframes mk-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.mk-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--mk-success);
+  animation: mk-pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* ============ LIVE TICKER MARQUEE ============ */
+.mk-marquee-wrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 96%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 96%, transparent 100%);
+}
+
+.mk-marquee {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  width: max-content;
+  animation: mk-scroll 90s linear infinite;
+}
+
+.mk-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes mk-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
