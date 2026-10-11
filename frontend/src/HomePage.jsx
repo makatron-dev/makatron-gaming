@@ -869,27 +869,27 @@ export default function HomePage({ theme, setTheme }) {
     >
       <TestimonialCard
         quote="I moved my entire fund from a legacy exchange after their outage cost me a position. MAKATRON TRADING hasn't dropped a single tick in four months."
-        name="Dr. E. Chizobam"
+        name="Fred Hosey"
         location="USA"
       />
       <TestimonialCard
         quote="The order book depth is genuine. I can push $200k through without slippage that would've wrecked me elsewhere. That's what matters."
-        name="Engr. C. Jigidechukwu"
+        name="Tracy Velora"
         location="South Africa"
       />
       <TestimonialCard
         quote="Their compliance team walked me through segregated custody for our treasury. That's the level of care you don't get from crypto startups."
-        name="Dr. A. Chisimdi"
+        name=" Zhang Wei"
         location="China"
       />
       <TestimonialCard
         quote="I've integrated with six exchange APIs. MAKATRON TRADING was the only one with documentation that made sense and latency we could trust."
-        name="Engr. A. Chiagozie"
+        name="Sandra Hamilton"
         location="Canada"
       />
       <TestimonialCard
         quote="Eight years in crypto. The first platform where I don't feel like I'm gambling on the infrastructure itself. It just works."
-        name="Engr. D. Mmesoma"
+        name="Somma Werner"
         location="Germany"
       />
     </div>

@@ -8,6 +8,7 @@ import {
   cancelMyOrder,
   getMyTrades,
   closePosition,
+  getMyPositions,
 } from './api'
 import useLivePrices from './useLivePrices'
 import TradingViewChart from './TradingViewChart'
@@ -24,7 +25,8 @@ const COIN_META = {
 
 const POPULAR_PAIRS = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT']
 const TRADE_FEE = 0.001
-// Map our symbols to Bybit ticker symbols for the order book
+const ALWAYS_SHOW_ASSETS = ['USDT', 'BTC', 'ETH', 'BNB', 'SOL', 'XRP']
+
 const BYBIT_SYMBOL_MAP = {
   'BTC/USDT': 'BTCUSDT',
   'ETH/USDT': 'ETHUSDT',
@@ -33,13 +35,12 @@ const BYBIT_SYMBOL_MAP = {
   'XRP/USDT': 'XRPUSDT',
 }
 
-// Fetch real order book snapshot from Bybit public API
 async function fetchOrderBook(pair) {
   const bybitSymbol = BYBIT_SYMBOL_MAP[pair]
   if (!bybitSymbol) return null
 
   try {
-    const url = `https://api.bybit.com/v5/market/orderbook?category=spot&symbol=${bybitSymbol}&limit=25`
+    const url = `https://api.bytick.com/v5/market/orderbook?category=spot&symbol=${bybitSymbol}&limit=25`
     const res = await fetch(url)
     if (!res.ok) return null
     const data = await res.json()
@@ -56,7 +57,6 @@ async function fetchOrderBook(pair) {
       total: parseFloat(price) * parseFloat(size),
     }))
 
-    // Take top 10 each, sort asks ascending (best ask last per your UI), bids descending
     const topBids = bids.slice(0, 10)
     const topAsks = asks.slice(0, 10).reverse()
 
@@ -66,9 +66,7 @@ async function fetchOrderBook(pair) {
   }
 }
 
-
-// Assets we always want to display in Balances, even at zero
-const ALWAYS_SHOW_ASSETS = ['USDT', 'BTC', 'ETH', 'BNB', 'SOL', 'XRP']
+const MONO = "'JetBrains Mono', ui-monospace, monospace"
 
 export default function TradePage({ theme, setTheme }) {
   const navigate = useNavigate()
@@ -86,6 +84,8 @@ export default function TradePage({ theme, setTheme }) {
   const [bottomTab, setBottomTab] = useState('balances')
   const [chartFullScreen, setChartFullScreen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isTablet, setIsTablet] = useState(false)
 
   const [openOrders, setOpenOrders] = useState([])
   const [allOrders, setAllOrders] = useState([])
@@ -95,6 +95,17 @@ export default function TradePage({ theme, setTheme }) {
 
   const baseAsset = selectedPair.split('/')[0]
   const quoteAsset = selectedPair.split('/')[1]
+
+  useEffect(() => {
+    function checkSize() {
+      const w = window.innerWidth
+      setIsMobile(w < 700)
+      setIsTablet(w >= 700 && w < 1200)
+    }
+    checkSize()
+    window.addEventListener('resize', checkSize)
+    return () => window.removeEventListener('resize', checkSize)
+  }, [])
 
   function getLivePrice(symbol) {
     const found = prices.find((p) => p.symbol === symbol)
@@ -119,7 +130,6 @@ export default function TradePage({ theme, setTheme }) {
     setTimeout(() => setToast(null), 3500)
   }
 
-  // ---------- DATA LOADERS ----------
   const refreshBalances = useCallback(async () => {
     try {
       const data = await getMyBalances()
@@ -153,8 +163,6 @@ export default function TradePage({ theme, setTheme }) {
 
   const refreshPositions = useCallback(async () => {
     try {
-      // Kept for close-position tracking (used for validation, not displayed)
-      const { getMyPositions } = await import('./api')
       const data = await getMyPositions()
       setPositions(data)
     } catch (err) {
@@ -171,7 +179,6 @@ export default function TradePage({ theme, setTheme }) {
     ])
   }, [refreshBalances, refreshOrders, refreshTrades, refreshPositions])
 
-  // ---------- INITIAL LOAD ----------
   useEffect(() => {
     if (!getToken()) {
       navigate('/login')
@@ -185,17 +192,14 @@ export default function TradePage({ theme, setTheme }) {
     load()
   }, [navigate, refreshAll])
 
-  // ---------- ORDER BOOK (real — fetched from Bybit) ----------
   useEffect(() => {
     let mounted = true
-
     async function loadBook() {
       const book = await fetchOrderBook(selectedPair)
       if (mounted && book) {
         setOrderBook(book)
       }
     }
-
     loadBook()
     const interval = setInterval(loadBook, 2000)
     return () => {
@@ -204,7 +208,6 @@ export default function TradePage({ theme, setTheme }) {
     }
   }, [selectedPair])
 
-  // ---------- ESC KEY ----------
   useEffect(() => {
     function onKey(e) {
       if (e.key === 'Escape' && chartFullScreen) setChartFullScreen(false)
@@ -213,7 +216,6 @@ export default function TradePage({ theme, setTheme }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [chartFullScreen])
 
-  // ---------- PERCENT ----------
   function handlePercent(percent) {
     setSliderValue(percent * 100)
     const available = side === 'buy' ? balanceFor(quoteAsset) : balanceFor(baseAsset)
@@ -235,7 +237,6 @@ export default function TradePage({ theme, setTheme }) {
     }
   }
 
-  // ---------- SUBMIT ORDER ----------
   async function handleSubmit(e) {
     e.preventDefault()
     if (submitting) return
@@ -287,7 +288,6 @@ export default function TradePage({ theme, setTheme }) {
     }
   }
 
-  // ---------- CANCEL ----------
   async function handleCancel(orderId) {
     try {
       await cancelMyOrder(orderId)
@@ -298,7 +298,6 @@ export default function TradePage({ theme, setTheme }) {
     }
   }
 
-  // ---------- CLOSE POSITION ----------
   async function handleClosePosition(asset) {
     const markPrice = getLivePrice(asset)
     if (!markPrice || markPrice <= 0) {
@@ -329,7 +328,6 @@ export default function TradePage({ theme, setTheme }) {
     }
   }
 
-  // ---------- DERIVED ----------
   const estimate = amount && currentPrice ? (parseFloat(amount) * currentPrice).toFixed(2) : '0.00'
   const fee = amount && currentPrice ? (parseFloat(amount) * currentPrice * TRADE_FEE).toFixed(4) : '0.0000'
   const spread =
@@ -337,7 +335,6 @@ export default function TradePage({ theme, setTheme }) {
       ? (orderBook.asks[orderBook.asks.length - 1].price - orderBook.bids[0].price).toFixed(4)
       : '0.0000'
 
-  // Build the Balances view: every asset from the backend, plus forced zero-rows for majors
   const balancesView = (() => {
     const map = new Map()
     balances.forEach((b) => {
@@ -356,12 +353,238 @@ export default function TradePage({ theme, setTheme }) {
       ...b,
       quantity: b.available + b.locked,
     })).sort((a, b) => {
-      // USDT first, then alphabetical
       if (a.asset === 'USDT') return -1
       if (b.asset === 'USDT') return 1
       return a.asset.localeCompare(b.asset)
     })
   })()
+
+  // ============================
+  // ORDER BOOK CARD (reused in all layouts)
+  // ============================
+  const orderBookCard = (
+    <div style={{ backgroundColor: 'var(--mk-bg-secondary)', border: '1px solid var(--mk-border)', borderRadius: '14px', overflow: 'hidden' }}>
+      <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--mk-border)' }}>
+        <span style={{ fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.16em', color: 'var(--mk-text-secondary)', textTransform: 'uppercase' }}>
+          Order Book
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', padding: '10px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--mk-text-secondary)', textTransform: 'uppercase' }}>
+        <div>Price</div>
+        <div style={{ textAlign: 'right' }}>Amount</div>
+        <div style={{ textAlign: 'right' }}>Total</div>
+      </div>
+      <div style={{ padding: '0 6px' }}>
+        {orderBook.asks.map((ask, i) => (
+          <OrderBookRow key={`a-${i}`} {...ask} side="ask" />
+        ))}
+      </div>
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--mk-border)', borderBottom: '1px solid var(--mk-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(240,185,11,0.04)' }}>
+        <span style={{ fontSize: '20px', fontWeight: 700, fontFamily: MONO, color: isPositive ? 'var(--mk-success-text)' : 'var(--mk-danger-text)' }}>
+          {currentPrice.toFixed(2)}
+        </span>
+        <span style={{ fontSize: '11.5px', color: 'var(--mk-text-secondary)' }}>Spread {spread}</span>
+      </div>
+      <div style={{ padding: '0 6px' }}>
+        {orderBook.bids.map((bid, i) => (
+          <OrderBookRow key={`b-${i}`} {...bid} side="bid" />
+        ))}
+      </div>
+    </div>
+  )
+
+  // ============================
+  // CHART CARD (reused)
+  // ============================
+  const chartCard = (
+    <div style={{ backgroundColor: 'var(--mk-bg-secondary)', border: '1px solid var(--mk-border)', borderRadius: '14px', overflow: 'hidden' }}>
+      <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--mk-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <span style={{ fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.16em', color: 'var(--mk-text-secondary)', textTransform: 'uppercase' }}>Chart</span>
+          <span style={{ fontSize: '12px', color: 'var(--mk-text-tertiary)' }}>Powered by TradingView</span>
+        </div>
+        <button
+          onClick={() => setChartFullScreen(true)}
+          style={{
+            padding: '7px 16px',
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--mk-accent-text)',
+            backgroundColor: 'rgba(240,185,11,0.12)',
+            border: '1px solid rgba(240,185,11,0.25)',
+            borderRadius: '6px',
+            cursor: 'pointer',
+          }}
+        >
+          ⛶ Full Screen
+        </button>
+      </div>
+      <div style={{ padding: '8px 4px 4px 4px' }}>
+        <TradingViewChart pair={selectedPair} height={isMobile ? 340 : 520} theme={theme} />
+      </div>
+    </div>
+  )
+
+  // ============================
+  // BUY/SELL PANEL CARD (reused)
+  // ============================
+  const orderFormCard = (
+    <div style={{ backgroundColor: 'var(--mk-bg-secondary)', border: '1px solid var(--mk-border)', borderRadius: '14px', padding: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', padding: '5px', backgroundColor: 'var(--mk-bg-primary)', border: '1px solid var(--mk-border)', borderRadius: '10px', marginBottom: '20px' }}>
+        <button
+          onClick={() => setSide('buy')}
+          style={{
+            padding: '10px',
+            fontSize: '13px',
+            fontWeight: 700,
+            color: side === 'buy' ? 'var(--mk-success-text)' : 'var(--mk-text-secondary)',
+            backgroundColor: side === 'buy' ? 'var(--mk-success-bg)' : 'transparent',
+            border: 'none',
+            borderRadius: '7px',
+            cursor: 'pointer',
+          }}
+        >
+          BUY
+        </button>
+        <button
+          onClick={() => setSide('sell')}
+          style={{
+            padding: '10px',
+            fontSize: '13px',
+            fontWeight: 700,
+            color: side === 'sell' ? 'var(--mk-danger-text)' : 'var(--mk-text-secondary)',
+            backgroundColor: side === 'sell' ? 'var(--mk-danger-bg)' : 'transparent',
+            border: 'none',
+            borderRadius: '7px',
+            cursor: 'pointer',
+          }}
+        >
+          SELL
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--mk-text-secondary)', marginBottom: '16px' }}>
+        <span>Available</span>
+        <span style={{ fontFamily: MONO, color: 'var(--mk-text-primary)' }}>
+          {side === 'buy'
+            ? `${balanceFor(quoteAsset).toFixed(2)} ${quoteAsset}`
+            : `${balanceFor(baseAsset).toFixed(4)} ${baseAsset}`}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '18px' }}>
+        {['limit', 'market'].map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setOrderType(t)}
+            style={{
+              padding: '5px 0',
+              fontSize: '13px',
+              fontWeight: 600,
+              color: orderType === t ? 'var(--mk-accent-text)' : 'var(--mk-text-tertiary)',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderBottom: orderType === t ? '2px solid var(--mk-accent)' : '2px solid transparent',
+              cursor: 'pointer',
+              textTransform: 'capitalize',
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        {orderType === 'limit' && (
+          <div style={{ marginBottom: '14px' }}>
+            <label className="mk-label" style={{ fontSize: '12.5px' }}>Price ({quoteAsset})</label>
+            <input
+              type="number"
+              step="any"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="mk-input"
+              placeholder={currentPrice.toFixed(2)}
+              style={{ fontFamily: MONO, fontSize: '14px', padding: '11px 14px' }}
+            />
+          </div>
+        )}
+
+        <div style={{ marginBottom: '12px' }}>
+          <label className="mk-label" style={{ fontSize: '12.5px' }}>Amount ({baseAsset})</label>
+          <input
+            type="number"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="mk-input"
+            placeholder="0.00"
+            style={{ fontFamily: MONO, fontSize: '14px', padding: '11px 14px' }}
+          />
+        </div>
+
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={sliderValue}
+          onChange={handleSlider}
+          style={{ width: '100%', marginBottom: '14px', accentColor: side === 'buy' ? 'var(--mk-success)' : 'var(--mk-danger)', cursor: 'pointer' }}
+        />
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '18px' }}>
+          {[25, 50, 75, 100].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => handlePercent(p / 100)}
+              style={{
+                padding: '7px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--mk-text-secondary)',
+                backgroundColor: 'var(--mk-bg-tertiary)',
+                border: '1px solid var(--mk-border)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              {p}%
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--mk-text-secondary)', marginBottom: '8px' }}>
+          <span>Total</span>
+          <span style={{ fontFamily: MONO, color: 'var(--mk-text-primary)' }}>{estimate} {quoteAsset}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--mk-text-secondary)', marginBottom: '20px' }}>
+          <span>Fee (0.10%)</span>
+          <span style={{ fontFamily: MONO }}>{fee} {quoteAsset}</span>
+        </div>
+
+        <button
+          type="submit"
+          disabled={submitting}
+          style={{
+            width: '100%',
+            padding: '14px',
+            fontSize: '14.5px',
+            fontWeight: 700,
+            color: '#fff',
+            backgroundColor: side === 'buy' ? 'var(--mk-success)' : 'var(--mk-danger)',
+            border: 'none',
+            borderRadius: '10px',
+            cursor: submitting ? 'not-allowed' : 'pointer',
+            opacity: submitting ? 0.6 : 1,
+          }}
+        >
+          {submitting ? 'Placing...' : `${side === 'buy' ? 'Buy' : 'Sell'} ${baseAsset}`}
+        </button>
+      </form>
+    </div>
+  )
 
   return (
     <AppLayout activePage="Trade" theme={theme} setTheme={setTheme}>
@@ -376,12 +599,12 @@ export default function TradePage({ theme, setTheme }) {
             zIndex: 9999,
             padding: '12px 20px',
             backgroundColor:
-              toast.type === 'error' ? 'rgba(246,70,93,0.95)' : 'rgba(14,203,129,0.95)',
+              toast.type === 'error' ? 'var(--mk-danger)' : 'var(--mk-success)',
             color: '#fff',
             fontSize: '14px',
             fontWeight: 600,
             borderRadius: '10px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            boxShadow: 'var(--mk-shadow-lg)',
           }}
         >
           {toast.message}
@@ -403,7 +626,7 @@ export default function TradePage({ theme, setTheme }) {
                   padding: '9px 16px',
                   fontSize: '13px',
                   fontWeight: 600,
-                  color: isActive ? '#000' : 'var(--mk-text-secondary)',
+                  color: isActive ? 'var(--mk-text-on-accent)' : 'var(--mk-text-secondary)',
                   backgroundColor: isActive ? 'var(--mk-accent)' : 'var(--mk-bg-secondary)',
                   border: isActive ? '1px solid var(--mk-accent)' : '1px solid var(--mk-border)',
                   borderRadius: '8px',
@@ -421,7 +644,7 @@ export default function TradePage({ theme, setTheme }) {
                     height: '20px',
                     borderRadius: '50%',
                     backgroundColor: isActive ? 'rgba(0,0,0,0.15)' : `${meta.color}25`,
-                    color: isActive ? '#000' : meta.color,
+                    color: isActive ? 'var(--mk-text-on-accent)' : meta.color,
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '12px',
@@ -453,236 +676,44 @@ export default function TradePage({ theme, setTheme }) {
         >
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--mk-text-primary)' }}>{selectedPair}</span>
-            <span style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'monospace', color: isPositive ? '#0ecb81' : '#f6465d' }}>
+            <span style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 700, fontFamily: MONO, color: isPositive ? 'var(--mk-success-text)' : 'var(--mk-danger-text)' }}>
               ${currentPrice.toFixed(2)}
             </span>
-            <span style={{ fontSize: '14px', fontWeight: 600, color: isPositive ? '#0ecb81' : '#f6465d' }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, fontFamily: MONO, color: isPositive ? 'var(--mk-success-text)' : 'var(--mk-danger-text)' }}>
               {isPositive ? '+' : ''}{currentChange.toFixed(2)}%
             </span>
           </div>
         </div>
 
-        {/* MAIN GRID */}
-        <div style={{ display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr) 350px', gap: '16px', alignItems: 'flex-start', marginBottom: '16px' }}>
-          {/* ORDER BOOK */}
-          <div style={{ backgroundColor: 'var(--mk-bg-secondary)', border: '1px solid var(--mk-border)', borderRadius: '14px', overflow: 'hidden' }}>
-            <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--mk-border)' }}>
-              <span style={{ fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.16em', color: 'var(--mk-text-tertiary)', textTransform: 'uppercase' }}>
-                Order Book
-              </span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', padding: '10px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--mk-text-tertiary)', textTransform: 'uppercase' }}>
-              <div>Price</div>
-              <div style={{ textAlign: 'right' }}>Amount</div>
-              <div style={{ textAlign: 'right' }}>Total</div>
-            </div>
-            <div style={{ padding: '0 6px' }}>
-              {orderBook.asks.map((ask, i) => (
-                <OrderBookRow key={`a-${i}`} {...ask} side="ask" />
-              ))}
-            </div>
-            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--mk-border)', borderBottom: '1px solid var(--mk-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(240,185,11,0.04)' }}>
-              <span style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'monospace', color: isPositive ? '#0ecb81' : '#f6465d' }}>
-                {currentPrice.toFixed(2)}
-              </span>
-              <span style={{ fontSize: '11.5px', color: 'var(--mk-text-tertiary)' }}>Spread {spread}</span>
-            </div>
-            <div style={{ padding: '0 6px' }}>
-              {orderBook.bids.map((bid, i) => (
-                <OrderBookRow key={`b-${i}`} {...bid} side="bid" />
-              ))}
+        {/* MAIN LAYOUT — different per breakpoint */}
+        {isMobile ? (
+          // MOBILE: single column — chart, order form, order book
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '16px' }}>
+            {chartCard}
+            {orderFormCard}
+            {orderBookCard}
+          </div>
+        ) : isTablet ? (
+          // TABLET: chart on top; order book + form side by side below
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '16px' }}>
+            {chartCard}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'flex-start' }}>
+              {orderBookCard}
+              {orderFormCard}
             </div>
           </div>
-
-          {/* CHART */}
-          <div style={{ backgroundColor: 'var(--mk-bg-secondary)', border: '1px solid var(--mk-border)', borderRadius: '14px', overflow: 'hidden' }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--mk-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                <span style={{ fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.16em', color: 'var(--mk-text-tertiary)', textTransform: 'uppercase' }}>Chart</span>
-                <span style={{ fontSize: '12px', color: 'var(--mk-text-tertiary)' }}>Powered by TradingView</span>
-              </div>
-              <button
-                onClick={() => setChartFullScreen(true)}
-                style={{
-                  padding: '7px 16px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--mk-accent)',
-                  backgroundColor: 'rgba(240,185,11,0.12)',
-                  border: '1px solid rgba(240,185,11,0.25)',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                }}
-              >
-                ⛶ Full Screen
-              </button>
-            </div>
-            <div style={{ padding: '8px 4px 4px 4px' }}>
-              <TradingViewChart pair={selectedPair} height={520} theme={theme} />
-            </div>
+        ) : (
+          // DESKTOP: three columns — order book, chart, form
+          <div style={{ display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr) 350px', gap: '16px', alignItems: 'flex-start', marginBottom: '16px' }}>
+            {orderBookCard}
+            {chartCard}
+            {orderFormCard}
           </div>
-
-          {/* BUY/SELL PANEL */}
-          <div style={{ backgroundColor: 'var(--mk-bg-secondary)', border: '1px solid var(--mk-border)', borderRadius: '14px', padding: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', padding: '5px', backgroundColor: 'var(--mk-bg-primary)', border: '1px solid var(--mk-border)', borderRadius: '10px', marginBottom: '20px' }}>
-              <button
-                onClick={() => setSide('buy')}
-                style={{
-                  padding: '10px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: side === 'buy' ? '#0ecb81' : 'var(--mk-text-secondary)',
-                  backgroundColor: side === 'buy' ? 'rgba(14,203,129,0.15)' : 'transparent',
-                  border: 'none',
-                  borderRadius: '7px',
-                  cursor: 'pointer',
-                }}
-              >
-                BUY
-              </button>
-              <button
-                onClick={() => setSide('sell')}
-                style={{
-                  padding: '10px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: side === 'sell' ? '#f6465d' : 'var(--mk-text-secondary)',
-                  backgroundColor: side === 'sell' ? 'rgba(246,70,93,0.15)' : 'transparent',
-                  border: 'none',
-                  borderRadius: '7px',
-                  cursor: 'pointer',
-                }}
-              >
-                SELL
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--mk-text-secondary)', marginBottom: '16px' }}>
-              <span>Available</span>
-              <span style={{ fontFamily: 'monospace', color: 'var(--mk-text-primary)' }}>
-                {side === 'buy'
-                  ? `${balanceFor(quoteAsset).toFixed(2)} ${quoteAsset}`
-                  : `${balanceFor(baseAsset).toFixed(4)} ${baseAsset}`}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '18px' }}>
-              {['limit', 'market'].map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setOrderType(t)}
-                  style={{
-                    padding: '5px 0',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: orderType === t ? 'var(--mk-accent)' : 'var(--mk-text-tertiary)',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    borderBottom: orderType === t ? '2px solid var(--mk-accent)' : '2px solid transparent',
-                    cursor: 'pointer',
-                    textTransform: 'capitalize',
-                  }}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-
-            <form onSubmit={handleSubmit}>
-              {orderType === 'limit' && (
-                <div style={{ marginBottom: '14px' }}>
-                  <label className="mk-label" style={{ fontSize: '12.5px' }}>Price ({quoteAsset})</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    className="mk-input"
-                    placeholder={currentPrice.toFixed(2)}
-                    style={{ fontFamily: 'monospace', fontSize: '14px', padding: '11px 14px' }}
-                  />
-                </div>
-              )}
-
-              <div style={{ marginBottom: '12px' }}>
-                <label className="mk-label" style={{ fontSize: '12.5px' }}>Amount ({baseAsset})</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="mk-input"
-                  placeholder="0.00"
-                  style={{ fontFamily: 'monospace', fontSize: '14px', padding: '11px 14px' }}
-                />
-              </div>
-
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={sliderValue}
-                onChange={handleSlider}
-                style={{ width: '100%', marginBottom: '14px', accentColor: side === 'buy' ? '#0ecb81' : '#f6465d', cursor: 'pointer' }}
-              />
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '18px' }}>
-                {[25, 50, 75, 100].map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => handlePercent(p / 100)}
-                    style={{
-                      padding: '7px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: 'var(--mk-text-secondary)',
-                      backgroundColor: 'var(--mk-bg-tertiary)',
-                      border: '1px solid var(--mk-border)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {p}%
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--mk-text-secondary)', marginBottom: '8px' }}>
-                <span>Total</span>
-                <span style={{ fontFamily: 'monospace', color: 'var(--mk-text-primary)' }}>{estimate} {quoteAsset}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--mk-text-tertiary)', marginBottom: '20px' }}>
-                <span>Fee (0.10%)</span>
-                <span style={{ fontFamily: 'monospace' }}>{fee} {quoteAsset}</span>
-              </div>
-
-              <button
-                type="submit"
-                disabled={submitting}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  fontSize: '14.5px',
-                  fontWeight: 700,
-                  color: '#fff',
-                  backgroundColor: side === 'buy' ? '#0ecb81' : '#f6465d',
-                  border: 'none',
-                  borderRadius: '10px',
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                  opacity: submitting ? 0.6 : 1,
-                }}
-              >
-                {submitting ? 'Placing...' : `${side === 'buy' ? 'Buy' : 'Sell'} ${baseAsset}`}
-              </button>
-            </form>
-          </div>
-        </div>
+        )}
 
         {/* BOTTOM TABS */}
         <div style={{ backgroundColor: 'var(--mk-bg-secondary)', border: '1px solid var(--mk-border)', borderRadius: '14px', overflow: 'hidden' }}>
-          <div style={{ display: 'flex', gap: '28px', padding: '18px 24px', borderBottom: '1px solid var(--mk-border)', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: isMobile ? '14px' : '28px', padding: isMobile ? '14px 16px' : '18px 24px', borderBottom: '1px solid var(--mk-border)', flexWrap: 'wrap', overflowX: 'auto' }}>
             {[
               { id: 'balances', label: 'Balances', count: balancesView.length },
               { id: 'openOrders', label: 'Open Orders', count: openOrders.length },
@@ -694,9 +725,9 @@ export default function TradePage({ theme, setTheme }) {
                 onClick={() => setBottomTab(tab.id)}
                 style={{
                   padding: '6px 0',
-                  fontSize: '14px',
+                  fontSize: isMobile ? '13px' : '14px',
                   fontWeight: 600,
-                  color: bottomTab === tab.id ? 'var(--mk-accent)' : 'var(--mk-text-tertiary)',
+                  color: bottomTab === tab.id ? 'var(--mk-accent-text)' : 'var(--mk-text-tertiary)',
                   backgroundColor: 'transparent',
                   border: 'none',
                   borderBottom: bottomTab === tab.id ? '2px solid var(--mk-accent)' : '2px solid transparent',
@@ -704,6 +735,7 @@ export default function TradePage({ theme, setTheme }) {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '8px',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {tab.label}
@@ -713,7 +745,7 @@ export default function TradePage({ theme, setTheme }) {
                     fontSize: '11.5px',
                     fontWeight: 700,
                     borderRadius: '10px',
-                    color: bottomTab === tab.id ? '#000' : 'var(--mk-text-secondary)',
+                    color: bottomTab === tab.id ? 'var(--mk-text-on-accent)' : 'var(--mk-text-secondary)',
                     backgroundColor: bottomTab === tab.id ? 'var(--mk-accent)' : 'var(--mk-bg-tertiary)',
                   }}
                 >
@@ -723,38 +755,41 @@ export default function TradePage({ theme, setTheme }) {
             ))}
           </div>
 
-          {bottomTab === 'balances' ? (
-            balancesView.length === 0 ? (
-              <EmptyState icon="💼" title="No balances" description="Your asset holdings will appear here." />
-            ) : (
-              <BalancesTable
-                balances={balancesView}
-                getLivePrice={getLivePrice}
-                onClose={handleClosePosition}
-                positions={positions}
-              />
-            )
-          ) : bottomTab === 'openOrders' ? (
-            openOrders.length === 0 ? (
-              <EmptyState icon="📋" title="No open orders" description="Pending limit orders will appear here." />
-            ) : (
-              <OrdersTable orders={openOrders} onCancel={handleCancel} showCancel />
-            )
-          ) : bottomTab === 'orderHistory' ? (
-            allOrders.length === 0 ? (
-              <EmptyState icon="📜" title="No order history" description="Every order you place — filled, cancelled, or pending — will appear here." />
-            ) : (
-              <OrdersTable orders={allOrders} onCancel={handleCancel} showCancel={false} />
-            )
-          ) : tradeHistory.length === 0 ? (
-            <EmptyState icon="📊" title="No trades yet" description="Your executed buy and sell orders will appear here." />
-          ) : (
-            <TradesTable trades={tradeHistory} />
-          )}
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: isMobile ? '700px' : 'auto' }}>
+              {bottomTab === 'balances' ? (
+                balancesView.length === 0 ? (
+                  <EmptyState icon="💼" title="No balances" description="Your asset holdings will appear here." />
+                ) : (
+                  <BalancesTable
+                    balances={balancesView}
+                    getLivePrice={getLivePrice}
+                    onClose={handleClosePosition}
+                    positions={positions}
+                  />
+                )
+              ) : bottomTab === 'openOrders' ? (
+                openOrders.length === 0 ? (
+                  <EmptyState icon="📋" title="No open orders" description="Pending limit orders will appear here." />
+                ) : (
+                  <OrdersTable orders={openOrders} onCancel={handleCancel} showCancel />
+                )
+              ) : bottomTab === 'orderHistory' ? (
+                allOrders.length === 0 ? (
+                  <EmptyState icon="📜" title="No order history" description="Every order you place — filled, cancelled, or pending — will appear here." />
+                ) : (
+                  <OrdersTable orders={allOrders} onCancel={handleCancel} showCancel={false} />
+                )
+              ) : tradeHistory.length === 0 ? (
+                <EmptyState icon="📊" title="No trades yet" description="Your executed buy and sell orders will appear here." />
+              ) : (
+                <TradesTable trades={tradeHistory} />
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* FULL-SCREEN CHART */}
       {chartFullScreen && (
         <div
           style={{
@@ -770,7 +805,7 @@ export default function TradePage({ theme, setTheme }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 8px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px' }}>
               <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--mk-text-primary)' }}>{selectedPair}</span>
-              <span style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'monospace', color: isPositive ? '#0ecb81' : '#f6465d' }}>
+              <span style={{ fontSize: '20px', fontWeight: 700, fontFamily: MONO, color: isPositive ? 'var(--mk-success-text)' : 'var(--mk-danger-text)' }}>
                 ${currentPrice.toFixed(2)}
               </span>
             </div>
@@ -803,9 +838,9 @@ export default function TradePage({ theme, setTheme }) {
 // ORDER BOOK ROW
 // ============================================
 function OrderBookRow({ price, amount, total, side }) {
-  const color = side === 'ask' ? '#f6465d' : '#0ecb81'
+  const color = side === 'ask' ? 'var(--mk-danger-text)' : 'var(--mk-success-text)'
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', padding: '4px 10px', fontSize: '12.5px', fontFamily: 'monospace' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', padding: '4px 10px', fontSize: '12.5px', fontFamily: MONO }}>
       <span style={{ color }}>{price.toFixed(2)}</span>
       <span style={{ textAlign: 'right', color: 'var(--mk-text-secondary)' }}>{amount.toFixed(4)}</span>
       <span style={{ textAlign: 'right', color: 'var(--mk-text-tertiary)' }}>{total.toFixed(2)}</span>
@@ -829,7 +864,7 @@ function EmptyState({ icon, title, description }) {
 }
 
 // ============================================
-// BALANCES TABLE  (Phase 3 — new)
+// BALANCES TABLE
 // ============================================
 function BalancesTable({ balances, getLivePrice, onClose, positions }) {
   const cols = '1fr 1.2fr 1.2fr 1.2fr 1.4fr 120px'
@@ -844,7 +879,7 @@ function BalancesTable({ balances, getLivePrice, onClose, positions }) {
           padding: '14px 24px',
           fontSize: '11.5px',
           fontWeight: 600,
-          color: 'var(--mk-text-tertiary)',
+          color: 'var(--mk-text-secondary)',
           textTransform: 'uppercase',
           borderBottom: '1px solid var(--mk-border)',
         }}
@@ -873,15 +908,15 @@ function BalancesTable({ balances, getLivePrice, onClose, positions }) {
               gap: '14px',
               padding: '18px 24px',
               fontSize: '14px',
-              fontFamily: 'monospace',
+              fontFamily: MONO,
               borderBottom: '1px solid var(--mk-border)',
               alignItems: 'center',
             }}
           >
-            <div style={{ fontWeight: 700, color: 'var(--mk-text-primary)' }}>{b.asset}</div>
+            <div style={{ fontWeight: 700, color: 'var(--mk-text-primary)', fontFamily: 'Inter, sans-serif' }}>{b.asset}</div>
             <div style={{ color: 'var(--mk-text-primary)' }}>{b.quantity.toFixed(8)}</div>
             <div style={{ color: 'var(--mk-text-secondary)' }}>{b.available.toFixed(8)}</div>
-            <div style={{ color: b.locked > 0 ? 'var(--mk-accent)' : 'var(--mk-text-tertiary)' }}>
+            <div style={{ color: b.locked > 0 ? 'var(--mk-accent-text)' : 'var(--mk-text-tertiary)' }}>
               {b.locked.toFixed(8)}
             </div>
             <div style={{ textAlign: 'right', color: 'var(--mk-text-primary)' }}>
@@ -895,7 +930,8 @@ function BalancesTable({ balances, getLivePrice, onClose, positions }) {
                     padding: '8px 18px',
                     fontSize: '12.5px',
                     fontWeight: 700,
-                    color: '#fff',
+                    fontFamily: 'Inter, sans-serif',
+                    color: 'var(--mk-text-on-danger)',
                     backgroundColor: 'var(--mk-danger)',
                     border: 'none',
                     borderRadius: '7px',
@@ -916,7 +952,7 @@ function BalancesTable({ balances, getLivePrice, onClose, positions }) {
 }
 
 // ============================================
-// ORDERS TABLE  (used by both Open Orders and Order History)
+// ORDERS TABLE
 // ============================================
 function OrdersTable({ orders, onCancel, showCancel = false }) {
   const cols = showCancel
@@ -933,7 +969,7 @@ function OrdersTable({ orders, onCancel, showCancel = false }) {
           padding: '14px 24px',
           fontSize: '11.5px',
           fontWeight: 600,
-          color: 'var(--mk-text-tertiary)',
+          color: 'var(--mk-text-secondary)',
           textTransform: 'uppercase',
           borderBottom: '1px solid var(--mk-border)',
         }}
@@ -953,10 +989,10 @@ function OrdersTable({ orders, onCancel, showCancel = false }) {
         const time = new Date(o.created_at).toLocaleTimeString('en-US', { hour12: false })
         const statusColor =
           o.status === 'filled'
-            ? '#0ecb81'
+            ? 'var(--mk-success-text)'
             : o.status === 'cancelled'
             ? 'var(--mk-text-tertiary)'
-            : 'var(--mk-accent)'
+            : 'var(--mk-accent-text)'
 
         return (
           <div
@@ -967,21 +1003,21 @@ function OrdersTable({ orders, onCancel, showCancel = false }) {
               gap: '14px',
               padding: '16px 24px',
               fontSize: '13.5px',
-              fontFamily: 'monospace',
+              fontFamily: MONO,
               borderBottom: '1px solid var(--mk-border)',
               alignItems: 'center',
             }}
           >
-            <div style={{ color: 'var(--mk-text-tertiary)' }}>{time}</div>
-            <div style={{ fontWeight: 600 }}>{o.symbol}</div>
-            <div style={{ color: o.side === 'buy' ? '#0ecb81' : '#f6465d', fontWeight: 700, textTransform: 'uppercase', fontSize: '12px' }}>
+            <div style={{ color: 'var(--mk-text-secondary)' }}>{time}</div>
+            <div style={{ fontWeight: 600, fontFamily: 'Inter, sans-serif', color: 'var(--mk-text-primary)' }}>{o.symbol}</div>
+            <div style={{ color: o.side === 'buy' ? 'var(--mk-success-text)' : 'var(--mk-danger-text)', fontWeight: 700, textTransform: 'uppercase', fontSize: '12px', fontFamily: 'Inter, sans-serif' }}>
               {o.side}
             </div>
-            <div style={{ color: 'var(--mk-text-secondary)', textTransform: 'capitalize' }}>{o.order_type}</div>
-            <div>{o.price ? parseFloat(o.price).toFixed(2) : 'Market'}</div>
-            <div>{parseFloat(o.quantity).toFixed(6)}</div>
+            <div style={{ color: 'var(--mk-text-secondary)', textTransform: 'capitalize', fontFamily: 'Inter, sans-serif' }}>{o.order_type}</div>
+            <div style={{ color: 'var(--mk-text-primary)' }}>{o.price ? parseFloat(o.price).toFixed(2) : 'Market'}</div>
+            <div style={{ color: 'var(--mk-text-primary)' }}>{parseFloat(o.quantity).toFixed(6)}</div>
             <div style={{ color: 'var(--mk-text-secondary)' }}>{parseFloat(o.filled_quantity || 0).toFixed(6)}</div>
-            <div style={{ color: statusColor, fontWeight: 600, textTransform: 'capitalize', fontSize: '12.5px' }}>
+            <div style={{ color: statusColor, fontWeight: 600, textTransform: 'capitalize', fontSize: '12.5px', fontFamily: 'Inter, sans-serif' }}>
               {o.status}
             </div>
             {showCancel && (
@@ -992,9 +1028,10 @@ function OrdersTable({ orders, onCancel, showCancel = false }) {
                     padding: '7px 16px',
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: 'var(--mk-danger)',
+                    fontFamily: 'Inter, sans-serif',
+                    color: 'var(--mk-danger-text)',
                     backgroundColor: 'transparent',
-                    border: '1px solid rgba(246,70,93,0.4)',
+                    border: '1px solid var(--mk-danger)',
                     borderRadius: '6px',
                     cursor: 'pointer',
                   }}
@@ -1026,7 +1063,7 @@ function TradesTable({ trades }) {
           padding: '14px 24px',
           fontSize: '11.5px',
           fontWeight: 600,
-          color: 'var(--mk-text-tertiary)',
+          color: 'var(--mk-text-secondary)',
           textTransform: 'uppercase',
           borderBottom: '1px solid var(--mk-border)',
         }}
@@ -1055,23 +1092,23 @@ function TradesTable({ trades }) {
               gap: '14px',
               padding: '16px 24px',
               fontSize: '13.5px',
-              fontFamily: 'monospace',
+              fontFamily: MONO,
               borderBottom: '1px solid var(--mk-border)',
               alignItems: 'center',
             }}
           >
-            <div style={{ color: 'var(--mk-text-tertiary)' }}>{time}</div>
-            <div style={{ fontWeight: 600 }}>{t.symbol}</div>
-            <div style={{ color: t.side === 'buy' ? '#0ecb81' : '#f6465d', fontWeight: 700, textTransform: 'uppercase', fontSize: '12px' }}>
+            <div style={{ color: 'var(--mk-text-secondary)' }}>{time}</div>
+            <div style={{ fontWeight: 600, fontFamily: 'Inter, sans-serif', color: 'var(--mk-text-primary)' }}>{t.symbol}</div>
+            <div style={{ color: t.side === 'buy' ? 'var(--mk-success-text)' : 'var(--mk-danger-text)', fontWeight: 700, textTransform: 'uppercase', fontSize: '12px', fontFamily: 'Inter, sans-serif' }}>
               {t.side}
             </div>
-            <div>{parseFloat(t.price).toFixed(2)}</div>
-            <div>{parseFloat(t.quantity).toFixed(6)}</div>
-            <div style={{ textAlign: 'right' }}>{parseFloat(t.total_value).toFixed(2)}</div>
+            <div style={{ color: 'var(--mk-text-primary)' }}>{parseFloat(t.price).toFixed(2)}</div>
+            <div style={{ color: 'var(--mk-text-primary)' }}>{parseFloat(t.quantity).toFixed(6)}</div>
+            <div style={{ textAlign: 'right', color: 'var(--mk-text-primary)' }}>{parseFloat(t.total_value).toFixed(2)}</div>
             <div
               style={{
                 textAlign: 'right',
-                color: isSell ? (pnlPositive ? '#0ecb81' : '#f6465d') : 'var(--mk-text-tertiary)',
+                color: isSell ? (pnlPositive ? 'var(--mk-success-text)' : 'var(--mk-danger-text)') : 'var(--mk-text-tertiary)',
                 fontWeight: isSell ? 700 : 400,
               }}
             >

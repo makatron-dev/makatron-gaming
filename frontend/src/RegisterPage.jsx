@@ -5,10 +5,7 @@ import SocialButtons from './SocialButtons'
 import LiveTicker from './LiveTicker'
 import PublicNav from './PublicNav'
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
-export default function RegisterPage() {
+export default function RegisterPage({ theme, setTheme }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -61,12 +58,9 @@ export default function RegisterPage() {
     >
       {loading && <div className="mk-progress-bar" />}
 
-      {/* TOP NAVIGATION */}
       <PublicNav theme={theme} setTheme={setTheme} />
 
-      {/* MAIN */}
       <div className="flex-1 flex" style={{ overflow: 'hidden' }}>
-        {/* LEFT — SCROLLABLE MARKETING */}
         <div
           className="hidden lg:block relative"
           style={{
@@ -204,7 +198,7 @@ export default function RegisterPage() {
                 description="Spot, margin, and derivatives — with APIs, webhooks, and algorithms for advanced traders."
               />
             </div>
-            {/* HOW IT WORKS SECTION */}
+
             <div
               style={{
                 marginTop: '64px',
@@ -243,7 +237,6 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* TESTIMONIALS */}
             <div
               style={{
                 marginTop: '64px',
@@ -265,34 +258,33 @@ export default function RegisterPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <TestimonialCard
-                  quote={`I signed up in 90 seconds and was trading within 5 minutes. Onboarding on MAKATRON TRADING is frictionless compared to every other platform I've tried.`}
-                  name="Dr. E. Chizobam"
+                  quote="I signed up in 90 seconds and was trading within 5 minutes. Onboarding on MAKATRON TRADING is frictionless compared to every other platform I've tried."
+                  name="Fred Hosey"
                   location="USA"
                 />
                 <TestimonialCard
-                  quote={`The verification process was instant. No waiting, no "review in 24-48 hours". I was in and trading on MAKATRON TRADING the same afternoon.`}
-                  name="Engr. C. Jigidechukwu"
+                  quote='The verification process was instant. No waiting, no "review in 24-48 hours". I was in and trading on MAKATRON TRADING the same afternoon.'
+                  name="Tracy Velora"
                   location="South Africa"
                 />
                 <TestimonialCard
-                  quote={`I opened my account from London and had a funded wallet within ten minutes. MAKATRON TRADING is what onboarding should have always been.`}
-                  name="Dr. A. Chisimdi"
+                  quote="I opened my account from London and had a funded wallet within ten minutes. MAKATRON TRADING is what onboarding should have always been."
+                  name="Kamala Houston"
                   location="China"
                 />
                 <TestimonialCard
-                  quote={`The signup flow is clean, the docs are clear, and I was able to plug in my trading bot the same day. MAKATRON TRADING made the migration trivial.`}
-                  name="Engr. A. Chiagozie"
+                  quote="The signup flow is clean, the docs are clear, and I was able to plug in my trading bot the same day. MAKATRON TRADING made the migration trivial."
+                  name="Sandra Hamilton"
                   location="Canada"
                 />
                 <TestimonialCard
-                  quote={`I run a fund and I've onboarded on dozens of exchanges. MAKATRON TRADING is in the top three for speed and quality of the setup process.`}
-                  name="Engr. D. Mmesoma"
+                  quote="I run a fund and I've onboarded on dozens of exchanges. MAKATRON TRADING is in the top three for speed and quality of the setup process."
+                  name="Somma Werner"
                   location="Germany"
                 />
               </div>
             </div>
 
-            {/* TRUST BADGES */}
             <div
               style={{
                 marginTop: '48px',
@@ -329,7 +321,6 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* RIGHT — FIXED REGISTER FORM */}
         <div
           className="flex-1 flex items-center justify-center relative"
           style={{ padding: '32px' }}
@@ -446,37 +437,37 @@ export default function RegisterPage() {
               )}
 
               <button
-  type="submit"
-  className="mk-btn-primary"
-  disabled={loading}
-  style={{
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '10px',
-    minHeight: '48px',
-  }}
->
-  {loading ? (
-    <>
-      <span
-        style={{
-          display: 'inline-block',
-          width: '18px',
-          height: '18px',
-          border: '2.5px solid rgba(0,0,0,0.25)',
-          borderTopColor: '#000',
-          borderRadius: '50%',
-          animation: 'mk-spin 0.7s linear infinite',
-        }}
-      />
-      <span>Creating account...</span>
-    </>
-  ) : (
-    'Create Account'
-  )}
-</button>
+                type="submit"
+                className="mk-btn-primary"
+                disabled={loading}
+                style={{
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  minHeight: '48px',
+                }}
+              >
+                {loading ? (
+                  <>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: '18px',
+                        height: '18px',
+                        border: '2.5px solid rgba(0,0,0,0.25)',
+                        borderTopColor: '#000',
+                        borderRadius: '50%',
+                        animation: 'mk-spin 0.7s linear infinite',
+                      }}
+                    />
+                    <span>Creating account...</span>
+                  </>
+                ) : (
+                  'Create Account'
+                )}
+              </button>
             </form>
 
             <div style={{ marginTop: '20px' }}>
@@ -498,15 +489,11 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      {/* BOTTOM — LIVE TICKER (PINNED, SCROLLING) */}
       <LiveTicker />
     </div>
   )
 }
 
-// ============================================
-// FEATURE ROW
-// ============================================
 function FeatureRow({ icon, accent, accentBorder, accentColor, title, description }) {
   return (
     <div className="flex items-start" style={{ gap: '18px' }}>
@@ -551,9 +538,6 @@ function FeatureRow({ icon, accent, accentBorder, accentColor, title, descriptio
   )
 }
 
-// ============================================
-// STAT ITEM
-// ============================================
 function StatItem({ value, label }) {
   return (
     <div>
@@ -583,9 +567,6 @@ function StatItem({ value, label }) {
   )
 }
 
-// ============================================
-// STEP ROW
-// ============================================
 function StepRow({ number, title, description }) {
   return (
     <div className="flex items-start" style={{ gap: '18px' }}>
@@ -628,9 +609,6 @@ function StepRow({ number, title, description }) {
   )
 }
 
-// ============================================
-// TESTIMONIAL CARD
-// ============================================
 function TestimonialCard({ quote, name, location }) {
   const parts = quote.split('TRADING')
   return (

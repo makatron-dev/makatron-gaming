@@ -1,4 +1,3 @@
-import os
 from fastapi import FastAPI, Depends, HTTPException, status, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -7,6 +6,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from decimal import Decimal
+import os
 from backend import models
 from backend.database import engine, get_db
 
@@ -249,6 +249,44 @@ def admin_credit_user(
     db.commit()
     return {
         "message": f"Credited {amount} {asset} to {user.email}",
+        "new_balance": str(balance.available),
+    }
+
+
+@app.post("/admin/users/{user_id}/debit")
+def admin_debit_user(
+    user_id: int,
+    asset: str = Form(...),
+    amount: str = Form(...),
+    admin=Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    balance = (
+        db.query(models.Balance)
+        .filter(models.Balance.user_id == user_id, models.Balance.asset == asset)
+        .first()
+    )
+    if not balance:
+        raise HTTPException(status_code=404, detail=f"No balance account for {asset}")
+
+    debit_amount = Decimal(amount)
+    if debit_amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    if Decimal(balance.available) < debit_amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient {asset}. Have {balance.available}, trying to debit {debit_amount}",
+        )
+
+    balance.available = Decimal(balance.available) - debit_amount
+    db.commit()
+    return {
+        "message": f"Debited {amount} {asset} from {user.email}",
         "new_balance": str(balance.available),
     }
 

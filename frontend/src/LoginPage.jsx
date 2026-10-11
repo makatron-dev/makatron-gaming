@@ -7,7 +7,7 @@ import LiveTicker from './LiveTicker'
 // ============================================
 // MAIN COMPONENT
 // ============================================
-export default function LoginPage() {
+export default function LoginPage({ theme, setTheme }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -312,27 +312,27 @@ export default function LoginPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <TestimonialCard
                   quote={`I've traded on six different platforms. MAKATRON TRADING is the first one where I don't have to choose between professional tools and a clean interface. It just works.`}
-                  name="Dr. E. Chizobam"
+                  name="Fred Hosey"
                   location="USA"
                 />
                 <TestimonialCard
                   quote={`The execution speed is unreal. Orders fill before I can even blink. I've moved my entire portfolio over and haven't looked back.`}
-                  name="Engr. C. Jigidechukwu"
+                  name="Tracy Velora"
                   location="South Africa"
                 />
                 <TestimonialCard
                   quote={`What sold me was the custody model. Cold storage, insurance, segregated accounts — MAKATRON TRADING feels like a real financial institution, not a crypto startup.`}
-                  name="Dr. A. Chisimdi"
+                  name="Kamala Houston"
                   location="China"
                 />
                 <TestimonialCard
                   quote={`I run an algorithmic strategy and the API is rock solid. Latency is consistent, documentation is clear, and support answers in minutes.`}
-                  name="Engr. A. Chiagozie"
+                  name="Sandra Hamilton"
                   location="Canada"
                 />
                 <TestimonialCard
                   quote={`Zero-fee deposits, transparent pricing, and no surprises. I've been in crypto for eight years — MAKATRON TRADING is the cleanest platform I've used.`}
-                  name="Engr. D. Mmesoma"
+                  name="Somma Werner"
                   location="Germany"
                 />
               </div>

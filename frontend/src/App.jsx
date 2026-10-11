@@ -9,31 +9,10 @@ import TradePage from './TradePage'
 import AdminPage from './AdminPage'
 import './index.css'
 
-function ContestPage() {
+function ContestPage({ theme, setTheme }) {
   return (
     <div className="min-h-screen flex items-center justify-center text-2xl">
       Contest — Coming Soon
-    </div>
-  )
-}
-
-function NotFoundPage() {
-  return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center"
-      style={{ gap: '20px' }}
-    >
-      <h1 style={{ fontSize: '48px', fontWeight: 700 }}>404</h1>
-      <p style={{ fontSize: '16px', opacity: 0.7 }}>
-        Page not found: {window.location.pathname}
-      </p>
-      <a
-        href="/"
-        className="mk-btn-primary"
-        style={{ width: 'auto', padding: '12px 24px' }}
-      >
-        Go to Home
-      </a>
     </div>
   )
 }
@@ -59,7 +38,6 @@ function App() {
         <Route path="/trade" element={<TradePage theme={theme} setTheme={setTheme} />} />
         <Route path="/contest" element={<ContestPage theme={theme} setTheme={setTheme} />} />
         <Route path="/admin" element={<AdminPage theme={theme} setTheme={setTheme} />} />
-        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   )

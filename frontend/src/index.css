@@ -3,6 +3,9 @@
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
 @import "@fontsource/inter/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
 
 /* ============ SHARED (never change) ============ */
 :root {
@@ -28,14 +31,22 @@
   --mk-border-hover: #2a2e37;
 
   --mk-text-primary: #ffffff;
-  --mk-text-secondary: #9ca3af;
-  --mk-text-tertiary: #6b7280;
+  --mk-text-secondary: #b8bcc4;
+  --mk-text-tertiary: #8a8f99;
 
   --mk-success: #0ecb81;
   --mk-success-bg: rgba(14, 203, 129, 0.12);
+  --mk-success-text: #0ecb81;
   --mk-danger: #f6465d;
   --mk-danger-bg: rgba(246, 70, 93, 0.12);
+  --mk-danger-text: #f6465d;
   --mk-info: #3b82f6;
+
+  --mk-text-on-accent: #000000;
+  --mk-accent-text: #f0b90b;
+  --mk-text-on-danger: #ffffff;
+  --mk-text-on-success: #ffffff;
+  --mk-overlay: rgba(0, 0, 0, 0.75);
 
   --mk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --mk-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -49,18 +60,27 @@
   --mk-bg-tertiary: #eef0f4;
   --mk-bg-hover: #e5e7eb;
 
-  --mk-border: #e5e7eb;
-  --mk-border-hover: #d1d5db;
+  --mk-border: #e0e3e8;
+  --mk-border-hover: #c8ccd3;
 
+  /* Darker secondary and tertiary for readability on white */
   --mk-text-primary: #0a0b0d;
-  --mk-text-secondary: #4b5563;
-  --mk-text-tertiary: #9ca3af;
+  --mk-text-secondary: #3a4049;
+  --mk-text-tertiary: #5f6771;
 
   --mk-success: #059669;
   --mk-success-bg: rgba(5, 150, 105, 0.10);
+  --mk-success-text: #047857;
   --mk-danger: #dc2626;
   --mk-danger-bg: rgba(220, 38, 38, 0.10);
+  --mk-danger-text: #b91c1c;
   --mk-info: #2563eb;
+
+  --mk-text-on-accent: #000000;
+  --mk-accent-text: #a16207;
+  --mk-text-on-danger: #ffffff;
+  --mk-text-on-success: #ffffff;
+  --mk-overlay: rgba(0, 0, 0, 0.55);
 
   --mk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --mk-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -147,7 +167,7 @@ body {
   background-color: var(--mk-accent);
   border: none;
   border-radius: var(--mk-radius-sm);
-  color: #000;
+  color: var(--mk-text-on-accent);
   font-size: 15px;
   font-weight: 600;
   font-family: inherit;
@@ -236,7 +256,7 @@ body {
 }
 
 .mk-link {
-  color: var(--mk-accent);
+  color: var(--mk-accent-text);
   text-decoration: none;
   font-weight: 500;
   transition: opacity 0.15s ease;
@@ -251,6 +271,20 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* ============ MONOSPACE NUMBERS ============ */
+.mk-mono {
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  letter-spacing: -0.01em;
+}
+
+.mk-mono-num {
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 /* ============ ANIMATIONS ============ */

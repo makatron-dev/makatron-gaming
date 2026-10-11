@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { getMyWallets, getToken } from './api'
 import AppLayout from './AppLayout'
 
-// ============================================
-// CHAIN CONFIG — icon, name, network label per asset
-// ============================================
+const MONO = "'JetBrains Mono', ui-monospace, monospace"
+
 const CHAIN_META = {
   BTC: { icon: '₿', name: 'Bitcoin', network: 'Bitcoin Mainnet', color: '#f7931a' },
   ETH: { icon: 'Ξ', name: 'Ethereum', network: 'Ethereum (ERC-20)', color: '#627eea' },
@@ -14,16 +13,23 @@ const CHAIN_META = {
   USDT_TRC20: { icon: '₮', name: 'Tether USD', network: 'TRON (TRC-20)', color: '#26a17b' },
 }
 
-// ============================================
-// MAIN WALLET PAGE
-// ============================================
-export default function WalletPage() {
+export default function WalletPage({ theme, setTheme }) {
   const navigate = useNavigate()
   const [wallets, setWallets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [copiedChain, setCopiedChain] = useState(null)
   const [activeTab, setActiveTab] = useState('deposit')
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    function checkSize() {
+      setIsMobile(window.innerWidth < 900)
+    }
+    checkSize()
+    window.addEventListener('resize', checkSize)
+    return () => window.removeEventListener('resize', checkSize)
+  }, [])
 
   useEffect(() => {
     if (!getToken()) {
@@ -55,38 +61,44 @@ export default function WalletPage() {
   }
 
   return (
-    <AppLayout activePage="Wallet">
+    <AppLayout activePage="Wallet" theme={theme} setTheme={setTheme}>
       {loading && <div className="mk-progress-bar" />}
 
       <div style={{ paddingTop: '8px' }}>
         {/* HEADING */}
         <div style={{ marginBottom: '28px' }}>
-          <h1 style={{
-            fontSize: '26px',
-            fontWeight: 700,
-            letterSpacing: '-0.025em',
-            color: 'var(--mk-text-primary)',
-          }}>
+          <h1
+            style={{
+              fontSize: isMobile ? '22px' : '26px',
+              fontWeight: 700,
+              letterSpacing: '-0.025em',
+              color: 'var(--mk-text-primary)',
+            }}
+          >
             Wallet
           </h1>
-          <p style={{
-            marginTop: '6px',
-            fontSize: '14px',
-            color: 'var(--mk-text-secondary)',
-          }}>
+          <p
+            style={{
+              marginTop: '6px',
+              fontSize: '14px',
+              color: 'var(--mk-text-secondary)',
+            }}
+          >
             Deposit or withdraw crypto from your MAKATRON TRADING account
           </p>
         </div>
 
         {/* TABS */}
-        <div style={{
-          display: 'inline-flex',
-          padding: '4px',
-          backgroundColor: 'var(--mk-bg-secondary)',
-          border: '1px solid var(--mk-border)',
-          borderRadius: '10px',
-          marginBottom: '24px',
-        }}>
+        <div
+          style={{
+            display: 'inline-flex',
+            padding: '4px',
+            backgroundColor: 'var(--mk-bg-secondary)',
+            border: '1px solid var(--mk-border)',
+            borderRadius: '10px',
+            marginBottom: '24px',
+          }}
+        >
           <TabButton
             label="Deposit"
             active={activeTab === 'deposit'}
@@ -100,22 +112,26 @@ export default function WalletPage() {
         </div>
 
         {/* INFO BANNER */}
-        <div style={{
-          padding: '14px 18px',
-          backgroundColor: 'rgba(240,185,11,0.08)',
-          border: '1px solid rgba(240,185,11,0.2)',
-          borderRadius: '10px',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '12px',
-        }}>
+        <div
+          style={{
+            padding: '14px 18px',
+            backgroundColor: 'rgba(240,185,11,0.08)',
+            border: '1px solid rgba(240,185,11,0.2)',
+            borderRadius: '10px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}
+        >
           <span style={{ fontSize: '18px', lineHeight: 1 }}>⚠️</span>
-          <p style={{
-            fontSize: '13px',
-            lineHeight: 1.65,
-            color: 'var(--mk-text-secondary)',
-          }}>
+          <p
+            style={{
+              fontSize: '13px',
+              lineHeight: 1.65,
+              color: 'var(--mk-text-secondary)',
+            }}
+          >
             <strong style={{ color: 'var(--mk-text-primary)' }}>Send only the matching asset.</strong>{' '}
             Each address below is unique to your account. Sending an incorrect asset or
             using the wrong network may result in permanent loss of funds.
@@ -124,15 +140,17 @@ export default function WalletPage() {
 
         {/* ERROR */}
         {error && (
-          <div style={{
-            marginBottom: '20px',
-            padding: '12px 16px',
-            backgroundColor: 'rgba(246,70,93,0.12)',
-            border: '1px solid rgba(246,70,93,0.3)',
-            borderRadius: '10px',
-            color: 'var(--mk-danger)',
-            fontSize: '13.5px',
-          }}>
+          <div
+            style={{
+              marginBottom: '20px',
+              padding: '12px 16px',
+              backgroundColor: 'var(--mk-danger-bg)',
+              border: '1px solid var(--mk-danger)',
+              borderRadius: '10px',
+              color: 'var(--mk-danger-text)',
+              fontSize: '13.5px',
+            }}
+          >
             {error}
           </div>
         )}
@@ -150,12 +168,14 @@ export default function WalletPage() {
                   borderRadius: '14px',
                 }}
               >
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '16px',
-                  marginBottom: '16px',
-                }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    marginBottom: '16px',
+                  }}
+                >
                   <div className="mk-skeleton" style={{ width: '40px', height: '40px', borderRadius: '10px' }} />
                   <div>
                     <div className="mk-skeleton" style={{ width: '100px', height: '14px', marginBottom: '6px' }} />
@@ -181,7 +201,7 @@ export default function WalletPage() {
                 <div
                   key={w.chain}
                   style={{
-                    padding: '24px',
+                    padding: isMobile ? '18px 16px' : '24px',
                     backgroundColor: 'var(--mk-bg-secondary)',
                     border: '1px solid var(--mk-border)',
                     borderRadius: '14px',
@@ -191,43 +211,54 @@ export default function WalletPage() {
                   onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--mk-border)')}
                 >
                   {/* CHAIN HEADER */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '18px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '10px',
-                        backgroundColor: `${meta.color}15`,
-                        border: `1px solid ${meta.color}40`,
-                        color: meta.color,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '20px',
-                        fontWeight: 700,
-                      }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '18px',
+                      gap: '12px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '10px',
+                          backgroundColor: `${meta.color}15`,
+                          border: `1px solid ${meta.color}40`,
+                          color: meta.color,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
                         {meta.icon}
                       </div>
-                      <div>
-                        <p style={{
-                          fontSize: '14.5px',
-                          fontWeight: 600,
-                          letterSpacing: '-0.01em',
-                          color: 'var(--mk-text-primary)',
-                        }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p
+                          style={{
+                            fontSize: '14.5px',
+                            fontWeight: 600,
+                            letterSpacing: '-0.01em',
+                            color: 'var(--mk-text-primary)',
+                          }}
+                        >
                           {meta.name}
                         </p>
-                        <p style={{
-                          fontSize: '12px',
-                          color: 'var(--mk-text-tertiary)',
-                          marginTop: '2px',
-                          letterSpacing: '0.02em',
-                        }}>
+                        <p
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--mk-text-secondary)',
+                            marginTop: '2px',
+                            letterSpacing: '0.02em',
+                          }}
+                        >
                           {meta.network}
                         </p>
                       </div>
@@ -240,9 +271,9 @@ export default function WalletPage() {
                         fontSize: '12.5px',
                         fontWeight: 600,
                         letterSpacing: '0.02em',
-                        color: isCopied ? '#0ecb81' : 'var(--mk-accent)',
-                        backgroundColor: isCopied ? 'rgba(14,203,129,0.12)' : 'var(--mk-bg-tertiary)',
-                        border: isCopied ? '1px solid rgba(14,203,129,0.3)' : '1px solid var(--mk-border)',
+                        color: isCopied ? 'var(--mk-success-text)' : 'var(--mk-accent-text)',
+                        backgroundColor: isCopied ? 'var(--mk-success-bg)' : 'var(--mk-bg-tertiary)',
+                        border: isCopied ? '1px solid var(--mk-success)' : '1px solid var(--mk-border)',
                         borderRadius: '8px',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease',
@@ -254,17 +285,19 @@ export default function WalletPage() {
                   </div>
 
                   {/* ADDRESS */}
-                  <div style={{
-                    padding: '14px 16px',
-                    backgroundColor: 'var(--mk-bg-primary)',
-                    border: '1px solid var(--mk-border)',
-                    borderRadius: '10px',
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                    fontSize: '13px',
-                    color: 'var(--mk-text-secondary)',
-                    wordBreak: 'break-all',
-                    lineHeight: 1.55,
-                  }}>
+                  <div
+                    style={{
+                      padding: '14px 16px',
+                      backgroundColor: 'var(--mk-bg-primary)',
+                      border: '1px solid var(--mk-border)',
+                      borderRadius: '10px',
+                      fontFamily: MONO,
+                      fontSize: '13px',
+                      color: 'var(--mk-text-secondary)',
+                      wordBreak: 'break-all',
+                      lineHeight: 1.55,
+                    }}
+                  >
                     {w.address}
                   </div>
                 </div>
@@ -274,25 +307,29 @@ export default function WalletPage() {
         )}
 
         {/* FOOTER HELP */}
-        <div style={{
-          marginTop: '32px',
-          padding: '20px',
-          backgroundColor: 'var(--mk-bg-secondary)',
-          border: '1px solid var(--mk-border)',
-          borderRadius: '14px',
-          textAlign: 'center',
-        }}>
-          <p style={{
-            fontSize: '13px',
-            color: 'var(--mk-text-secondary)',
-            lineHeight: 1.65,
-          }}>
+        <div
+          style={{
+            marginTop: '32px',
+            padding: '20px',
+            backgroundColor: 'var(--mk-bg-secondary)',
+            border: '1px solid var(--mk-border)',
+            borderRadius: '14px',
+            textAlign: 'center',
+          }}
+        >
+          <p
+            style={{
+              fontSize: '13px',
+              color: 'var(--mk-text-secondary)',
+              lineHeight: 1.65,
+            }}
+          >
             Need help with deposits?{' '}
-            <a href="/support" style={{ color: 'var(--mk-accent)', fontWeight: 500 }}>
+            <a href="/support" style={{ color: 'var(--mk-accent-text)', fontWeight: 500 }}>
               Contact support
             </a>{' '}
             or check our{' '}
-            <a href="/support" style={{ color: 'var(--mk-accent)', fontWeight: 500 }}>
+            <a href="/support" style={{ color: 'var(--mk-accent-text)', fontWeight: 500 }}>
               deposit guide
             </a>.
           </p>
@@ -302,9 +339,6 @@ export default function WalletPage() {
   )
 }
 
-// ============================================
-// TAB BUTTON
-// ============================================
 function TabButton({ label, active, onClick }) {
   return (
     <button

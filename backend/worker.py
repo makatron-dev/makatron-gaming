@@ -27,7 +27,7 @@ from backend import models
 # ============================================
 
 SCAN_INTERVAL = 5  # seconds between scans
-BYBIT_BASE = "https://api.bybit.com"
+BYBIT_BASE = "https://api.bytick.com"
 TRADE_FEE_RATE = Decimal("0.001")
 
 # Map our symbols to Bybit spot ticker symbols

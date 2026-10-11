@@ -4,9 +4,8 @@ import { getMyBalances, getToken } from './api'
 import useLivePrices from './useLivePrices'
 import AppLayout from './AppLayout'
 
-// ============================================
-// ANIMATED NUMBER — smooth count-up on load
-// ============================================
+const MONO = "'JetBrains Mono', ui-monospace, monospace"
+
 function AnimatedNumber({ value, decimals = 2, prefix = '$' }) {
   const [display, setDisplay] = useState(0)
 
@@ -42,16 +41,23 @@ function AnimatedNumber({ value, decimals = 2, prefix = '$' }) {
   )
 }
 
-// ============================================
-// MAIN DASHBOARD
-// ============================================
-export default function DashboardPage() {
+export default function DashboardPage({ theme, setTheme }) {
   const navigate = useNavigate()
   const { prices } = useLivePrices()
 
   const [balances, setBalances] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    function checkSize() {
+      setIsMobile(window.innerWidth < 900)
+    }
+    checkSize()
+    window.addEventListener('resize', checkSize)
+    return () => window.removeEventListener('resize', checkSize)
+  }, [])
 
   useEffect(() => {
     if (!getToken()) {
@@ -73,6 +79,7 @@ export default function DashboardPage() {
   }, [navigate])
 
   function priceFor(asset) {
+    if (asset === 'USDT') return 1
     const found = prices.find((p) => p.symbol === asset)
     return found ? found.price : 0
   }
@@ -100,16 +107,14 @@ export default function DashboardPage() {
   const isPositive = avgChange >= 0
 
   return (
-    <AppLayout activePage="Dashboard">
-      {/* TOP PROGRESS BAR — appears when loading */}
+    <AppLayout activePage="Dashboard" theme={theme} setTheme={setTheme}>
       {loading && <div className="mk-progress-bar" />}
 
       <div style={{ paddingTop: '8px' }}>
-        {/* HEADING */}
         <div style={{ marginBottom: '28px' }}>
           <h1
             style={{
-              fontSize: '26px',
+              fontSize: isMobile ? '22px' : '26px',
               fontWeight: 700,
               letterSpacing: '-0.025em',
               color: 'var(--mk-text-primary)',
@@ -128,16 +133,15 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* ERROR */}
         {error && (
           <div
             style={{
               marginBottom: '20px',
               padding: '12px 16px',
-              backgroundColor: 'rgba(246,70,93,0.12)',
-              border: '1px solid rgba(246,70,93,0.3)',
+              backgroundColor: 'var(--mk-danger-bg)',
+              border: '1px solid var(--mk-danger)',
               borderRadius: '10px',
-              color: 'var(--mk-danger)',
+              color: 'var(--mk-danger-text)',
               fontSize: '13.5px',
             }}
           >
@@ -148,7 +152,7 @@ export default function DashboardPage() {
         {/* PORTFOLIO VALUE CARD */}
         <div
           style={{
-            padding: '32px',
+            padding: isMobile ? '24px 20px' : '32px',
             backgroundColor: 'var(--mk-bg-secondary)',
             border: '1px solid var(--mk-border)',
             borderRadius: '16px',
@@ -175,7 +179,7 @@ export default function DashboardPage() {
                 fontSize: '11px',
                 fontWeight: 600,
                 letterSpacing: '0.16em',
-                color: 'var(--mk-text-tertiary)',
+                color: 'var(--mk-text-secondary)',
                 textTransform: 'uppercase',
                 marginBottom: '14px',
               }}
@@ -190,7 +194,7 @@ export default function DashboardPage() {
                     display: 'inline-block',
                     width: '26px',
                     height: '26px',
-                    border: '3px solid rgba(240,185,11,0.2)',
+                    border: '3px solid var(--mk-accent-glow)',
                     borderTopColor: 'var(--mk-accent)',
                     borderRadius: '50%',
                     animation: 'mk-spin 0.7s linear infinite',
@@ -209,11 +213,13 @@ export default function DashboardPage() {
             ) : (
               <div
                 style={{
-                  fontSize: '48px',
+                  fontSize: isMobile ? '36px' : '48px',
                   fontWeight: 700,
                   letterSpacing: '-0.035em',
                   color: 'var(--mk-text-primary)',
                   lineHeight: 1.05,
+                  fontFamily: MONO,
+                  wordBreak: 'break-all',
                 }}
               >
                 <AnimatedNumber value={totalValue} decimals={2} prefix="$" />
@@ -234,10 +240,9 @@ export default function DashboardPage() {
                   fontWeight: 600,
                   padding: '4px 10px',
                   borderRadius: '6px',
-                  color: isPositive ? '#0ecb81' : '#f6465d',
-                  backgroundColor: isPositive
-                    ? 'rgba(14,203,129,0.12)'
-                    : 'rgba(246,70,93,0.12)',
+                  fontFamily: MONO,
+                  color: isPositive ? 'var(--mk-success-text)' : 'var(--mk-danger-text)',
+                  backgroundColor: isPositive ? 'var(--mk-success-bg)' : 'var(--mk-danger-bg)',
                 }}
               >
                 {isPositive ? '▲' : '▼'} {Math.abs(avgChange).toFixed(2)}%
@@ -348,7 +353,8 @@ export default function DashboardPage() {
                         style={{
                           fontSize: '11.5px',
                           fontWeight: 600,
-                          color: positive ? '#0ecb81' : '#f6465d',
+                          fontFamily: MONO,
+                          color: positive ? 'var(--mk-success-text)' : 'var(--mk-danger-text)',
                         }}
                       >
                         {positive ? '+' : ''}
@@ -362,7 +368,7 @@ export default function DashboardPage() {
                         fontWeight: 700,
                         letterSpacing: '-0.02em',
                         color: 'var(--mk-text-primary)',
-                        fontFamily: 'monospace',
+                        fontFamily: MONO,
                       }}
                     >
                       {qty.toFixed(4)}
@@ -373,6 +379,7 @@ export default function DashboardPage() {
                         marginTop: '6px',
                         fontSize: '13px',
                         color: 'var(--mk-text-secondary)',
+                        fontFamily: MONO,
                       }}
                     >
                       ≈ ${usdValue.toFixed(2)}
@@ -410,9 +417,9 @@ export default function DashboardPage() {
               icon="⬇"
               title="Deposit Crypto"
               description="Get your unique deposit address"
-              accent="rgba(14,203,129,0.12)"
-              accentBorder="rgba(14,203,129,0.25)"
-              accentColor="#0ecb81"
+              accent="var(--mk-success-bg)"
+              accentBorder="var(--mk-success)"
+              accentColor="var(--mk-success-text)"
             />
             <ActionCard
               href="/trade"
@@ -421,7 +428,7 @@ export default function DashboardPage() {
               description="Buy and sell across 180+ markets"
               accent="rgba(240,185,11,0.12)"
               accentBorder="rgba(240,185,11,0.25)"
-              accentColor="#f0b90b"
+              accentColor="var(--mk-accent-text)"
             />
             <ActionCard
               href="/wallet"
@@ -518,9 +525,6 @@ export default function DashboardPage() {
   )
 }
 
-// ============================================
-// ACTION CARD
-// ============================================
 function ActionCard({ href, icon, title, description, accent, accentBorder, accentColor }) {
   return (
     <a

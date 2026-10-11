@@ -2,7 +2,15 @@
 // MAKATRON BROKER — API CLIENT
 // ============================================
 
-const API_BASE = 'https://makatron-broker-api.onrender.com'
+// ---- API BASE ----
+// In development (running on localhost), hit the local backend.
+// In production (deployed on Netlify), hit Render.
+const API_BASE =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : 'https://makatron-broker-api.onrender.com'
+
+console.log('[API] Using base URL:', API_BASE)
 
 // ---- TOKEN MANAGEMENT ----
 export function saveToken(token) {
@@ -164,6 +172,24 @@ export async function adminCreditUser(userId, asset, amount) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || 'Failed to credit user')
+  }
+  return res.json()
+}
+
+// ---- ADMIN: DEBIT USER ----
+export async function adminDebitUser(userId, asset, amount) {
+  const body = new URLSearchParams({ asset, amount })
+  const res = await fetch(`${API_BASE}/admin/users/${userId}/debit`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to debit user')
   }
   return res.json()
 }
